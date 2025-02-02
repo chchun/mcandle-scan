@@ -14,78 +14,113 @@ import vpos.apipackage.At
 class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: BLEDeviceAdapter
-    private lateinit var btnScan: Button // ✅ 스캔 버튼 추가
-    private val deviceList = mutableListOf<String>() // BLE 장치 정보 저장
+    private lateinit var btnScan: Button
+    private lateinit var btnClear: Button  // Clear 버튼 추가
+    private val deviceList = mutableListOf<String>()
+    private val USE_SIMULATOR_MODE = true // 시뮬레이터 모드 플래그
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         recyclerView = findViewById(R.id.recyclerView)
-        btnScan = findViewById(R.id.btnScan) // ✅ 버튼 초기화
+        btnScan = findViewById(R.id.btnScan)
+        btnClear = findViewById(R.id.btnClear)  // Clear 버튼 초기화
+
         adapter = BLEDeviceAdapter(deviceList)
         recyclerView.adapter = adapter
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        // ✅ 버튼 클릭 시 BLE 스캔 시작
         btnScan.setOnClickListener {
-            startScan()
+            if (USE_SIMULATOR_MODE) {
+                startScanSimul()
+            } else {
+                startScan()
+            }
+        }
+
+        // Clear 버튼 클릭 시 BLE 목록 초기화
+        btnClear.setOnClickListener {
+            deviceList.clear() // 목록 초기화
+            adapter.notifyDataSetChanged() // RecyclerView 갱신
+            Toast.makeText(this, "목록이 초기화되었습니다.", Toast.LENGTH_SHORT).show()
+            Log.d("BLE_SCAN", "Device list cleared.")
         }
     }
 
     private fun startScan() {
         Log.d("BLE_SCAN", "Initializing BLE master mode...")
-
-        // ✅ BLE 마스터 모드 활성화
         val ret = At.Lib_EnableMaster(true)
-        if (ret == 0) {
-            Log.d("BLE_SCAN", "Start master succeeded!")
-            SendPromptMsg("Start master succeeded!\n")
-        } else {
+        if (ret != 0) {
             Log.e("BLE_SCAN", "Start master failed, return: $ret")
-            SendPromptMsg("Start beacon failed, return: $ret\n")
-            return // ✅ 마스터 모드 활성화 실패 시 스캔을 시작하지 않음
+            sendPromptMsg("Start beacon failed, return: $ret\n")
+            return
         }
 
-        // ✅ BLE 스캔 시작
         Log.d("BLE_SCAN", "Starting BLE scan...")
-        SendPromptMsg("SCANNING\n")
+        sendPromptMsg("SCANNING\n")
 
-        val scanResult = At.Lib_AtStartScan(10) // 10초 동안 스캔 실행
+        val scanResult = At.Lib_AtStartScan(10)
         if (scanResult != 0) {
             Log.e("BLE_SCAN", "ERROR WHILE STARTING SCAN, RET = $scanResult")
-            SendPromptMsg("ERROR WHILE STARTING SCAN, RET = $scanResult\n")
+            sendPromptMsg("ERROR WHILE STARTING SCAN, RET = $scanResult\n")
             return
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
             val devices = Array(20) { "" }
-
-            for (i in 0 until 10) { // 2초 간격으로 10회 반복
+            for (i in 0 until 10) {
                 delay(2000)
-                val ret = At.Lib_GetScanResult(3, devices) // 3초 동안 BLE 장치 검색
-                if (ret == 0) {
-                    for (device in devices) {
-                        if (!device.isNullOrEmpty() && !deviceList.contains(device)) {
-                            Log.d("BLE_SCAN", "NEW DEVICE DISCOVERED: $device")
-                            SendPromptMsg("NEW DEVICE DISCOVERED: $device\n")
-
-                            withContext(Dispatchers.Main) {
-                                deviceList.add(device)
-                                adapter.notifyItemInserted(deviceList.size - 1) // RecyclerView 업데이트
-                            }
-                        }
-                    }
+                val getScanResult = At.Lib_GetScanResult(3, devices)
+                if (getScanResult == 0) {
+                    updateDeviceList(devices)
                 }
             }
         }
     }
 
-    // ✅ Toast 메시지를 `lifecycleScope.launch`를 사용하여 안전하게 실행
-    private fun SendPromptMsg(message: String) {
+    private fun startScanSimul() {
+        Log.d("BLE_SCAN", "Starting simulated BLE scan...")
+        sendPromptMsg("SIMULATED SCANNING\n")
+
+        val simulatedDevices = listOf(
+            "00:11:22:33:44:55 -50 Device_A",
+            "66:77:88:99:AA:BB -60 Device_B",
+            "CC:DD:EE:FF:00:11 -70 Device_C",
+            "22:33:44:55:66:77 -80 Device_D",
+            "88:99:AA:BB:CC:DD -90 Device_E"
+        )
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            delay(2000)
+            updateDeviceList(simulatedDevices.toTypedArray())
+        }
+    }
+
+    private suspend fun updateDeviceList(devices: Array<String>) {
+        for (device in devices) {
+            if (!device.isNullOrEmpty() && !deviceList.contains(device)) {
+                val deviceInfo = device.split(" ")
+                val deviceAddress = deviceInfo.getOrNull(0) ?: "Unknown"
+                val deviceRssi = deviceInfo.getOrNull(1) ?: "Unknown"
+                val deviceName = deviceInfo.getOrNull(2) ?: "Unknown"
+
+                val formattedDeviceInfo = "address: $deviceAddress, rssi: $deviceRssi, device name: $deviceName"
+                Log.d("BLE_SCAN", "NEW DEVICE DISCOVERED: $formattedDeviceInfo")
+                sendPromptMsg("NEW DEVICE DISCOVERED: $formattedDeviceInfo\n")
+
+                withContext(Dispatchers.Main) {
+                    deviceList.add(formattedDeviceInfo)
+                    adapter.notifyItemInserted(deviceList.size - 1)
+                }
+            }
+        }
+    }
+
+    private fun sendPromptMsg(message: String) {
         lifecycleScope.launch {
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
         }
-        Log.d("BLE_SCAN", message) // 기존 Log 출력 유지
+        Log.d("BLE_SCAN", message)
     }
 }
