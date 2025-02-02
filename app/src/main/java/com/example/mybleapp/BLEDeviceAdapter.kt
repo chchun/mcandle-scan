@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class BLEDeviceAdapter(private val deviceList: MutableList<String>) :
+class BLEDeviceAdapter(private val deviceList: MutableList<DeviceModel>) :
     RecyclerView.Adapter<BLEDeviceAdapter.BLEDeviceViewHolder>() {
 
     class BLEDeviceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -22,14 +22,11 @@ class BLEDeviceAdapter(private val deviceList: MutableList<String>) :
     }
 
     override fun onBindViewHolder(holder: BLEDeviceViewHolder, position: Int) {
-        val deviceInfo = deviceList[position].split(", ")
-        val deviceAddress = deviceInfo.getOrNull(0)?.replace("address: ", "") ?: "Unknown"
-        val deviceRssi = deviceInfo.getOrNull(1)?.replace("rssi: ", "") ?: "Unknown"
-        val deviceName = deviceInfo.getOrNull(2)?.replace("device name: ", "") ?: "Unknown"
+        val device = deviceList[position]  // 🔹 DeviceModel 사용
 
-        holder.deviceAddressTextView.text = "$deviceAddress"
-        holder.deviceRssiTextView.text = "$deviceRssi dBm"
-        holder.deviceNameTextView.text = "$deviceName"
+        holder.deviceAddressTextView.text = device.address
+        holder.deviceRssiTextView.text = "${device.rssi} dBm"
+        holder.deviceNameTextView.text = device.name
     }
 
     override fun getItemCount(): Int {
