@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- 버튼들을 수평 정렬 -->
+    <!-- 버튼들을 가로로 정렬 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -13,16 +13,27 @@
         android:gravity="center"
         android:layout_marginBottom="10dp">
 
-        <!-- BLE 스캔 시작 버튼 -->
+        <!-- 1회 스캔 버튼 -->
         <Button
             android:id="@+id/btnScan"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="Start Scan"
+            android:text="1 Scan"
             android:padding="10dp"
             android:textSize="18sp"
-            android:layout_marginEnd="8dp"/>  <!-- 오른쪽 간격 추가 -->
+            android:layout_marginEnd="8dp"/>
+
+        <!-- n Scan 버튼 -->
+        <Button
+            android:id="@+id/btnNScan"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="n Scan"
+            android:padding="10dp"
+            android:textSize="18sp"
+            android:layout_marginEnd="8dp"/>
 
         <!-- 결과 초기화 버튼 -->
         <Button
@@ -30,14 +41,13 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="Clear Results"
+            android:text="Clear"
             android:padding="10dp"
             android:textSize="18sp"
-            android:layout_marginStart="8dp"/> <!-- 왼쪽 간격 추가 -->
+            android:layout_marginStart="8dp"/>
     </LinearLayout>
 
     <!-- RecyclerView: BLE 장치 목록 표시 -->
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"

@@ -2,67 +2,74 @@ package com.example.mybleapp
 
 import android.util.Log
 import kotlinx.coroutines.*
-import vpos.apipackage.At
+import kotlin.random.Random
 
-class BLEScanner {
+class BLEScanner(
+    private val onDevicesUpdated: (List<DeviceModel>, Boolean) -> Unit,
+    private val onScanStatusChanged: (Boolean) -> Unit,
+    private val onMessage: (String) -> Unit  // 메시지를 MainActivity로 전달하는 콜백
+) {
+    private var isScanning = false
+    private var scanJob: Job? = null
+    private val USE_SIMULATOR_MODE = true
 
-    private val deviceList = mutableListOf<String>() // BLE 장치 정보를 저장할 리스트
-    private var isScanning = false // 스캔 상태 플래그
-
-    /**
-     * BLE 스캔 시작 (비동기)
-     */
-    fun startScan(scanDuration: Int = 10, callback: (List<String>) -> Unit) {
-        if (isScanning) {
-            Log.d("BLEScanner", "Scanning is already in progress.")
-            return
-        }
-
-        Log.d("BLEScanner", "Starting BLE Scan...")
-        val scanResult = At.Lib_AtStartScan(scanDuration)
-        if (scanResult != 0) {
-            Log.e("BLEScanner", "Error while starting scan, return code = $scanResult")
-            return
-        }
-
-        isScanning = true
+    fun startScan() {
+        Log.d("BLE_SCAN", "Starting single BLE scan...")
+        onMessage("SCANNING\n")
 
         CoroutineScope(Dispatchers.IO).launch {
-            val devices = Array(20) { "" }
+            delay(2000)
+            val scannedDevices = listOf(
+                DeviceModel("Device_X", "AA:BB:CC:DD:EE:FF", -60)
+            )
+            onDevicesUpdated(scannedDevices, false)
+        }
+    }
 
-            for (i in 0 until scanDuration / 2) { // 2초 간격으로 확인
-                delay(2000) // 2초 대기
-                val ret = At.Lib_GetScanResult(3, devices) // 3초 동안 장치 검색
-                if (ret == 0) {
-                    for (device in devices) {
-                        if (!device.isNullOrEmpty() && !deviceList.contains(device)) {
-                            Log.d("BLEScanner", "NEW DEVICE DISCOVERED: $device")
-                            deviceList.add(device)
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        callback(deviceList) // UI에 업데이트 콜백 실행
-                    }
+    fun startScanSimul() {
+        Log.d("BLE_SCAN", "Starting simulated BLE scan...")
+        onMessage("SIMULATED SCANNING\n")
+
+        val possibleDevices = listOf(
+            DeviceModel("Device_A", "00:11:22:33:44:55", 0),
+            DeviceModel("Device_B", "66:77:88:99:AA:BB", 0),
+            DeviceModel("Device_C", "CC:DD:EE:FF:00:11", 0)
+        )
+
+        val deviceCount = Random.nextInt(2, 8)
+        val simulatedDevices = List(deviceCount) {
+            val device = possibleDevices[Random.nextInt(possibleDevices.size)]
+            DeviceModel(device.name, device.address, Random.nextInt(-100, -50))
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(2000)
+            onDevicesUpdated(simulatedDevices, false)
+        }
+    }
+
+    fun startScanLoop() {
+        isScanning = true
+        onScanStatusChanged(true)
+        Log.d("BLE_SCAN", "Starting continuous scan...")
+
+        scanJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isScanning) {
+                if (USE_SIMULATOR_MODE) {
+                    startScanSimul()
+                } else {
+                    startScan()
                 }
+                delay(5000)
             }
-            isScanning = false
         }
     }
 
-    /**
-     * 현재 검색된 BLE 장치 리스트 반환
-     */
-    fun getScanResults(): List<String> {
-        return deviceList
-    }
-
-    /**
-     * BLE 스캔 중지
-     */
-    fun stopScan() {
-        if (isScanning) {
-            Log.d("BLEScanner", "Stopping BLE Scan...")
-            isScanning = false
-        }
+    fun stopScanLoop() {
+        isScanning = false
+        onScanStatusChanged(false)
+        scanJob?.cancel()
+        onMessage("Scan Stop")  // UI에서 Toast 메시지를 표시하도록 전달
+        Log.d("BLE_SCAN", "Scan stopped.")
     }
 }
