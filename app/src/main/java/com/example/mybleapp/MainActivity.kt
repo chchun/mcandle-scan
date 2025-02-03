@@ -18,7 +18,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnScan: Button
     private lateinit var btnClear: Button
     private val deviceList = mutableListOf<DeviceModel>() // 🔹 DeviceModel 리스트로 변경
-    private val USE_SIMULATOR_MODE = true
+    private val USE_SIMULATOR_MODE = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,17 +80,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     private fun startScanSimul() {
         Log.d("BLE_SCAN", "Starting simulated BLE scan...")
         sendPromptMsg("SIMULATED SCANNING\n")
 
-        val simulatedDevices = listOf(
-            DeviceModel("Device_A", "00:11:22:33:44:55", Random.nextInt(-100, -50)),
-            DeviceModel("Device_B", "66:77:88:99:AA:BB", Random.nextInt(-100, -50)),
-            DeviceModel("Device_C", "CC:DD:EE:FF:00:11", Random.nextInt(-100, -50)),
-            DeviceModel("Device_D", "22:33:44:55:66:77", Random.nextInt(-100, -50)),
-            DeviceModel("Device_E", "88:99:AA:BB:CC:DD", Random.nextInt(-100, -50))
+        // List of possible devices
+        val possibleDevices = listOf(
+            DeviceModel("Device_A", "00:11:22:33:44:55", 0),
+            DeviceModel("Device_B", "66:77:88:99:AA:BB", 0),
+            DeviceModel("Device_C", "CC:DD:EE:FF:00:11", 0),
+            DeviceModel("Device_D", "22:33:44:55:66:77", 0),
+            DeviceModel("Device_E", "88:99:AA:BB:CC:DD", 0),
+            DeviceModel("Device_F", "11:22:33:44:55:66", 0),
+            DeviceModel("Device_G", "77:88:99:AA:BB:CC", 0),
+            DeviceModel("Device_H", "99:AA:BB:CC:DD:EE", 0),
+            DeviceModel("Device_I", "11:22:33:44:55:77", 0),
+            DeviceModel("Device_J", "88:99:AA:BB:CC:00", 0)
         )
+
+        val deviceCount = Random.nextInt(2, 8)
+        val simulatedDevices = List(deviceCount) {
+            val device = possibleDevices[Random.nextInt(possibleDevices.size)]
+            DeviceModel(device.name, device.address, Random.nextInt(-100, -50))
+        }
 
         lifecycleScope.launch(Dispatchers.IO) {
             delay(2000)
@@ -98,16 +111,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun updateDeviceList(newDevices: List<DeviceModel>) {
+        private suspend fun updateDeviceList(newDevices: List<DeviceModel>) {
         withContext(Dispatchers.Main) {
             val updatedDevices = mutableListOf<String>()
 
+            // Mark existing devices as gray if they are not in the new list
+            deviceList.forEach { device ->
+                if (newDevices.none { it.address == device.address }) {
+                    device.rssi = -100 // assuming -100 represents gray
+                    adapter.notifyDataSetChanged()
+                }
+            }
+
+            // Update or add new devices
             for (newDevice in newDevices) {
                 val existingDevice = deviceList.find { it.address == newDevice.address }
                 if (existingDevice != null) {
+                    // Update existing device RSSI
                     existingDevice.rssi = newDevice.rssi
                     adapter.notifyDataSetChanged()
                 } else {
+                    // Add new device
                     deviceList.add(newDevice)
                     adapter.notifyItemInserted(deviceList.size - 1)
                 }
@@ -119,6 +143,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
 
     private fun sendPromptMsg(message: String) {
         lifecycleScope.launch {
