@@ -7,11 +7,15 @@ import kotlin.random.Random
 class BLEScanner(
     private val onDevicesUpdated: (List<DeviceModel>, Boolean) -> Unit,
     private val onScanStatusChanged: (Boolean) -> Unit,
-    private val onMessage: (String) -> Unit  // 메시지를 MainActivity로 전달하는 콜백
+    private val onMessage: (String) -> Unit  // UI 메시지 전달용 콜백
 ) {
     private var isScanning = false
     private var scanJob: Job? = null
-    private val USE_SIMULATOR_MODE = true
+    private var USE_SIMULATOR_MODE = true
+
+    fun setSimulatorMode(isSimulated: Boolean) {
+        USE_SIMULATOR_MODE = isSimulated
+    }
 
     fun startScan() {
         Log.d("BLE_SCAN", "Starting single BLE scan...")
@@ -31,9 +35,9 @@ class BLEScanner(
         onMessage("SIMULATED SCANNING\n")
 
         val possibleDevices = listOf(
-            DeviceModel("Device_A", "00:11:22:33:44:55", 0),
-            DeviceModel("Device_B", "66:77:88:99:AA:BB", 0),
-            DeviceModel("Device_C", "CC:DD:EE:FF:00:11", 0)
+            DeviceModel("Mi Band 6", "00:11:22:33:44:55", 0),
+            DeviceModel("Apple AirTag", "66:77:88:99:AA:BB", 0),
+            DeviceModel("Galaxy Watch 5", "CC:DD:EE:FF:00:11", 0)
         )
 
         val deviceCount = Random.nextInt(2, 8)
@@ -69,7 +73,7 @@ class BLEScanner(
         isScanning = false
         onScanStatusChanged(false)
         scanJob?.cancel()
-        onMessage("Scan Stop")  // UI에서 Toast 메시지를 표시하도록 전달
+        onMessage("Scan Stop")
         Log.d("BLE_SCAN", "Scan stopped.")
     }
 }

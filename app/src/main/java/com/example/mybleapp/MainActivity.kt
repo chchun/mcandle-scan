@@ -3,6 +3,7 @@ package com.example.mybleapp
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
+import android.widget.Switch
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -18,15 +19,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnScan: Button
     private lateinit var btnNScan: Button
     private lateinit var btnClear: Button
+    private lateinit var switchSimul: Switch
+
     private var isScanning = false
     private var scanJob: Job? = null
     private val deviceList = mutableListOf<DeviceModel>()
-    private val USE_SIMULATOR_MODE = true  // 시뮬레이션 모드 사용 여부
+    private var USE_SIMULATOR_MODE = true  // 시뮬레이션 모드 사용 여부
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // findViewById를 통해 뷰를 초기화합니다.
+        switchSimul = findViewById(R.id.switchSimul)
         recyclerView = findViewById(R.id.recyclerView)
         btnScan = findViewById(R.id.btnScan)
         btnNScan = findViewById(R.id.btnNScan)
@@ -35,6 +40,15 @@ class MainActivity : AppCompatActivity() {
         adapter = BLEDeviceAdapter(deviceList)
         recyclerView.adapter = adapter
         recyclerView.layoutManager = LinearLayoutManager(this)
+
+        // 시뮬레이션 모드 스위치 초기화 및 상태 변경 리스너 설정
+        switchSimul.isChecked = USE_SIMULATOR_MODE
+        switchSimul.setOnCheckedChangeListener { _, isChecked ->
+            USE_SIMULATOR_MODE = isChecked
+            val mode = if (isChecked) "Simulated" else "Real"
+            clearDeviceList()
+            Toast.makeText(this, "Mode: $mode", Toast.LENGTH_SHORT).show()
+        }
 
         // 1 Scan 버튼 클릭 시 단일 스캔 실행
         btnScan.setOnClickListener {
@@ -64,15 +78,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startScan() {
-        Log.d("BLE_SCAN", "Starting single BLE scan...")
+        Log.d("BLE_SCAN", "Initializing BLE master mode...")
+        var ret = At.Lib_EnableMaster(true)
+        if (ret != 0) {
+            Log.e("BLE_SCAN", "Start master failed, return: $ret")
+            sendPromptMsg("Start beacon failed, return: $ret\n")
+            return
+        }
+
+        Log.d("BLE_SCAN", "Starting BLE scan...")
         sendPromptMsg("SCANNING\n")
 
+        val scanResult = At.Lib_AtStartScan(10)
+        if (scanResult != 0) {
+            Log.e("BLE_SCAN", "ERROR WHILE STARTING SCAN, RET = $scanResult")
+            sendPromptMsg("ERROR WHILE STARTING SCAN, RET = $scanResult\n")
+            return
+        }
+
         lifecycleScope.launch(Dispatchers.IO) {
-            delay(2000)  // BLE 스캔 대기 시간 (예제)
-            val scannedDevices = listOf(
-                DeviceModel("Device_X", "AA:BB:CC:DD:EE:FF", -60)
-            )
-            updateDeviceList(scannedDevices)
+            val devices = Array(20) { "" }
+            val discoveredDevices = mutableListOf<DeviceModel>()
+
+            for (i in 0 until 10) {
+                // BLE 스캔 결과 가져오기
+                ret = At.Lib_GetScanResult(3, devices)
+
+                if (ret == 0) {
+                    for (deviceString in devices) {
+                        if (deviceString.isNotEmpty()) {
+                            val deviceModel = parseDevice(deviceString)
+                            discoveredDevices.add(deviceModel)
+                            sendPromptMsg("NEW DEVICE DISCOVERED: $deviceModel\n")
+                        }
+                    }
+                    updateDeviceList(discoveredDevices)
+                } else {
+                    sendPromptMsg("ERROR WHILE SCANNING, RET = $ret\n")
+                    break
+                }
+            }
         }
     }
 
@@ -140,6 +185,7 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             btnScan.isEnabled = isEnabled
             btnClear.isEnabled = isEnabled
+            switchSimul.isEnabled = isEnabled
         }
     }
 
@@ -190,5 +236,14 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
         }
         Log.d("BLE_SCAN", message)
+    }
+
+    private fun parseDevice(deviceString: String): DeviceModel {
+        val parts = deviceString.split(" ")
+        return DeviceModel(
+            name = parts.getOrNull(2) ?: "Unknown",
+            address = parts.getOrNull(0) ?: "Unknown",
+            rssi = parts.getOrNull(1)?.toIntOrNull() ?: -100
+        )
     }
 }
