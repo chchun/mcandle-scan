@@ -1,79 +1,99 @@
 package com.example.mybleapp
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
-import kotlinx.coroutines.*
-import kotlin.random.Random
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 
-class BLEScanner(
-    private val onDevicesUpdated: (List<DeviceModel>, Boolean) -> Unit,
-    private val onScanStatusChanged: (Boolean) -> Unit,
-    private val onMessage: (String) -> Unit  // UI 메시지 전달용 콜백
-) {
-    private var isScanning = false
-    private var scanJob: Job? = null
-    private var USE_SIMULATOR_MODE = true
+class BLEScanner(private val context: Context) {
+    private val bluetoothAdapter: BluetoothAdapter?
+    private val bleScanner: BluetoothLeScanner?
+    private val scanResults = mutableMapOf<String, DeviceModel>()
+    private val _deviceList = MutableLiveData<List<DeviceModel>>()
+    val deviceList: LiveData<List<DeviceModel>> get() = _deviceList
 
-    fun setSimulatorMode(isSimulated: Boolean) {
-        USE_SIMULATOR_MODE = isSimulated
+    init {
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothAdapter = bluetoothManager.adapter
+        bleScanner = bluetoothAdapter?.bluetoothLeScanner
+    }
+
+    private fun hasScanPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
     }
 
     fun startScan() {
-        Log.d("BLE_SCAN", "Starting single BLE scan...")
-        onMessage("SCANNING\n")
+        if (bluetoothAdapter?.isEnabled != true) {
+            Log.e("BLE_SCAN", "Bluetooth is disabled")
+            return
+        }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            delay(2000)
-            val scannedDevices = listOf(
-                DeviceModel("Device_X", "AA:BB:CC:DD:EE:FF", -60)
-            )
-            onDevicesUpdated(scannedDevices, false)
+        if (!hasScanPermission()) {
+            Log.e("BLE_SCAN", "Missing BLUETOOTH_SCAN permission")
+            return
+        }
+
+        scanResults.clear()
+
+        val scanFilters = listOf(ScanFilter.Builder().build())
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+
+        try {
+            bleScanner?.startScan(scanFilters, scanSettings, scanCallback)
+            Log.d("BLE_SCAN", "Scanning started")
+        } catch (e: SecurityException) {
+            Log.e("BLE_SCAN", "SecurityException: Missing permissions for BLE scan", e)
         }
     }
 
-    fun startScanSimul() {
-        Log.d("BLE_SCAN", "Starting simulated BLE scan...")
-        onMessage("SIMULATED SCANNING\n")
-
-        val possibleDevices = listOf(
-            DeviceModel("Mi Band 6", "00:11:22:33:44:55", 0),
-            DeviceModel("Apple AirTag", "66:77:88:99:AA:BB", 0),
-            DeviceModel("Galaxy Watch 5", "CC:DD:EE:FF:00:11", 0)
-        )
-
-        val deviceCount = Random.nextInt(2, 8)
-        val simulatedDevices = List(deviceCount) {
-            val device = possibleDevices[Random.nextInt(possibleDevices.size)]
-            DeviceModel(device.name, device.address, Random.nextInt(-100, -50))
+    fun stopScan() {
+        if (!hasScanPermission()) {
+            Log.e("BLE_SCAN", "Missing BLUETOOTH_SCAN permission")
+            return
         }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            delay(2000)
-            onDevicesUpdated(simulatedDevices, false)
+        try {
+            bleScanner?.stopScan(scanCallback)
+            Log.d("BLE_SCAN", "Scanning stopped")
+        } catch (e: SecurityException) {
+            Log.e("BLE_SCAN", "SecurityException: Missing permissions for BLE scan stop", e)
         }
     }
 
-    fun startScanLoop() {
-        isScanning = true
-        onScanStatusChanged(true)
-        Log.d("BLE_SCAN", "Starting continuous scan...")
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            result?.let {
+                val device = it.device
+                val rssi = it.rssi
+                val address = device.address
+                val name = device.name ?: "Unknown"
 
-        scanJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isScanning) {
-                if (USE_SIMULATOR_MODE) {
-                    startScanSimul()
-                } else {
-                    startScan()
+                val newDevice = DeviceModel(name, address, rssi)
+                if (!scanResults.containsKey(address)) {
+                    scanResults[address] = newDevice
+                    _deviceList.postValue(scanResults.values.toList())
                 }
-                delay(5000)
             }
         }
-    }
 
-    fun stopScanLoop() {
-        isScanning = false
-        onScanStatusChanged(false)
-        scanJob?.cancel()
-        onMessage("Scan Stop")
-        Log.d("BLE_SCAN", "Scan stopped.")
+        override fun onBatchScanResults(results: MutableList<ScanResult>?) {
+            results?.forEach { result -> onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, result) }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e("BLE_SCAN", "Scan failed with error: $errorCode")
+        }
     }
 }
