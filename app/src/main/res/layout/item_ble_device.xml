@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:padding="10dp">
 
-    <!-- Device Name (Bold & Larger Text) -->
+    <!-- 1번째 라인: Device Name -->
     <TextView
         android:id="@+id/deviceName"
         android:layout_width="match_parent"
@@ -15,11 +15,12 @@
         android:textColor="#000000"
         android:text="" />
 
-    <!-- Address & RSSI in a horizontal row -->
+    <!-- 2번째 라인: Address (좌측), RSSI (우측) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
         <!-- Address (Left-aligned) -->
         <TextView
@@ -55,6 +56,46 @@
                 android:text="-50" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- 3번째 라인: Tx Power -->
+    <TextView
+        android:id="@+id/tvTxPower"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tx Power: N/A"
+        android:visibility="gone"/>
+
+    <!-- 4번째 라인: Bond State -->
+    <TextView
+        android:id="@+id/tvBondState"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Bond State: None"
+        android:visibility="gone"/>
+
+    <!-- 5번째 라인: Manufacturer Data -->
+    <TextView
+        android:id="@+id/tvManufacturerData"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Manufacturer Data: N/A"
+        android:visibility="gone"/>
+
+    <!-- 6번째 라인: Service UUIDs -->
+    <TextView
+        android:id="@+id/tvServiceUUIDs"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Service UUIDs: N/A"
+        android:visibility="gone"/>
+
+    <!-- 7번째 라인: Service Data -->
+    <TextView
+        android:id="@+id/tvServiceData"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Service Data: N/A"
+        android:visibility="gone"/>
 
     <!-- Divider Line -->
     <View

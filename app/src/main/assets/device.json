@@ -1,0 +1,76 @@
+[
+  {
+    "name": "Mi Band 6",
+    "address": "00:11:22:33:44:55",
+    "rssi": -55
+  },
+  {
+    "name": "Apple AirTag",
+    "address": "66:77:88:99:AA:BB",
+    "rssi": -70
+  },
+  {
+    "name": "Fitbit Charge 5",
+    "address": "22:33:44:55:66:77",
+    "rssi": 0
+  },
+  {
+    "name": "Tile Tracker",
+    "address": "88:99:AA:BB:CC:DD",
+    "rssi": 0
+  },
+  {
+    "name": "Bose QC Earbuds",
+    "address": "11:22:33:44:55:66",
+    "rssi": 0
+  },
+  {
+    "name": "Garmin Forerunner 945",
+    "address": "77:88:99:AA:BB:CC",
+    "rssi": 0
+  },
+  {
+    "name": "JBL Bluetooth Speaker",
+    "address": "99:AA:BB:CC:DD:EE",
+    "rssi": 0
+  },
+  {
+    "name": "Sony WH-1000XM4",
+    "address": "11:22:33:44:55:77",
+    "rssi": 0
+  },
+  {
+    "name": "Galaxy Watch 5",
+    "address": "CC:DD:EE:FF:00:11",
+    "rssi": -50,
+    "txPower": 13,
+    "connectable": true,
+    "bondState": "Bonded",
+    "manufacturerData": {
+      "76": "AhVqsQ=="
+    },
+    "serviceUuids": [
+      "0000180d-0000-1000-8000-00805f9b34fb"
+    ],
+    "serviceData": {
+      "0000180d-0000-1000-8000-00805f9b34fb": "AQID"
+    }
+  },
+  {
+    "name": "Galaxy Buds Pro",
+    "address": "CC:AA:EE:FF:00:33",
+    "rssi": -50,
+    "txPower": 13,
+    "connectable": true,
+    "bondState": "Bonded",
+    "manufacturerData": {
+      "76": "AhVqsQ=="
+    },
+    "serviceUuids": [
+      "0000180d-0000-1000-8000-00805f9b34fb"
+    ],
+    "serviceData": {
+      "0000180d-0000-1000-8000-00805f9b34fb": "AQID"
+    }
+  }
+]
