@@ -1,33 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Simul Mode 스위치를 LinearLayout으로 감싸고 오른쪽 끝으로 배치 -->
-    <LinearLayout
-        android:layout_width="match_parent"
+    <!-- Server Mode 스위치 (왼쪽 정렬) -->
+    <Switch
+        android:id="@+id/switchServer"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="end">
+        android:text="Server Mode"
+        android:checked="true"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
 
-        <Switch
-            android:id="@+id/switchSimul"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Simul Mode"
-            android:checked="true" />
-    </LinearLayout>
+    <!-- Simul Mode 스위치 (오른쪽 정렬) -->
+    <Switch
+        android:id="@+id/switchSimul"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Simul Mode"
+        android:checked="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
 
-    <!-- 버튼들을 가로로 정렬 -->
+    <!-- 버튼들을 포함하는 LinearLayout -->
     <LinearLayout
+        android:id="@+id/buttonLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center"
-        android:layout_marginBottom="10dp">
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@id/switchServer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- 1회 스캔 버튼 -->
+        <!-- Scan 버튼 -->
         <Button
             android:id="@+id/btnScan"
             android:layout_width="0dp"
@@ -49,7 +60,7 @@
             android:textSize="16sp"
             android:layout_marginEnd="8dp"/>
 
-        <!-- 결과 초기화 버튼 -->
+        <!-- Clear 버튼 -->
         <Button
             android:id="@+id/btnClear"
             android:layout_width="0dp"
@@ -61,13 +72,17 @@
             android:layout_marginStart="8dp"/>
     </LinearLayout>
 
-    <!-- RecyclerView: BLE 장치 목록 표시 -->
+    <!-- BLE 장치 목록을 표시하는 RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_marginTop="16dp"
         android:background="#F5F5F5"
-    android:padding="16dp"
-    android:scrollbars="vertical"/>
-</LinearLayout>
+        android:padding="16dp"
+        android:scrollbars="vertical"
+        app:layout_constraintTop_toBottomOf="@id/buttonLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+</androidx.constraintlayout.widget.ConstraintLayout>
