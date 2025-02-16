@@ -1,4 +1,4 @@
-package com.example.mybleapp
+package com.mcandle.blescan
 
 data class MemberInfo(
     val id: String,

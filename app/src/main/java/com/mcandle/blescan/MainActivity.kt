@@ -1,4 +1,4 @@
-package com.example.mybleapp
+package com.mcandle.blescan
 
 import android.os.Bundle
 import android.util.Log
@@ -10,7 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.mybleapp.ui.MemberInfoDialog
+import com.mcandle.blescan.ui.MemberInfoDialog
 import kotlinx.coroutines.*
 import retrofit2.Call
 import retrofit2.Callback

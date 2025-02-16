@@ -1,4 +1,4 @@
-package com.example.mybleapp
+package com.mcandle.blescan
 
 import retrofit2.Call
 import retrofit2.http.GET

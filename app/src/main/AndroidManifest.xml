@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.mcandle.blescan">
+
 
     <!-- ✅ BLE 스캔 및 연결을 위한 필수 권한 -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
@@ -31,7 +33,7 @@
         tools:targetApi="31">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.mcandle.blescan.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

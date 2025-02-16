@@ -1,4 +1,4 @@
-package com.example.mybleapp
+package com.mcandle.blescan
 
 data class DeviceModel(
     val name: String = "Unknown",

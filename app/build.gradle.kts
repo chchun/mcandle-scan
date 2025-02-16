@@ -4,11 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mybleapp"
+    namespace = "com.mcandle.blescan"
     compileSdk = 35
 
+    buildFeatures {
+        viewBinding = true  // ✅ 올바른 설정 방법
+    }
+
     defaultConfig {
-        applicationId = "com.example.mybleapp"
+        applicationId = "com.mcandle.blescan"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -37,6 +41,8 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
+
 }
 
 // ✅ AAR 파일을 위한 `flatDir` 설정 (이 부분을 `android {}` 블록 바깥으로 이동)

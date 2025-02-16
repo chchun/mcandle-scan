@@ -1,4 +1,4 @@
-package com.example.mybleapp
+package com.mcandle.blescan
 
 import android.view.LayoutInflater
 import android.view.View
