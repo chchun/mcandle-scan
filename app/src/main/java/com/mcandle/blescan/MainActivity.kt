@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mcandle.blescan.ui.MemberInfoDialog
+import com.mcandle.blescan.utils.BLEUtils
 import kotlinx.coroutines.*
 import retrofit2.Call
 import retrofit2.Callback
@@ -193,7 +194,7 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Scan Stopped", Toast.LENGTH_SHORT).show()
     }
 
-    // 🔹 RecyclerView 목록 업데이트 함수
+    // 🔹 RecyclerView 목록 업데이트 함수 (중복 변환 제거)
     private suspend fun updateDeviceList(newDevices: List<DeviceModel>) {
         withContext(Dispatchers.Main) {
             var newDeviceCount = 0
@@ -206,14 +207,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // 신규 및 업데이트된 장치 처리
+            // 신규 및 업데이트된 장치 처리 (HEX 값 그대로 유지)
             for (newDevice in newDevices) {
                 val existingDevice = deviceList.find { it.address == newDevice.address }
+
                 if (existingDevice != null) {
                     existingDevice.rssi = newDevice.rssi
+                    existingDevice.manufacturerData = newDevice.manufacturerData  // ✅ 변환 제거
+                    existingDevice.serviceData = newDevice.serviceData  // ✅ 변환 제거
                     updatedDeviceCount++
                 } else {
-                    deviceList.add(newDevice)
+                    deviceList.add(newDevice) // ✅ 그대로 추가
                     newDeviceCount++
                 }
             }
@@ -222,6 +226,8 @@ class MainActivity : AppCompatActivity() {
             Log.d("BLE_SCAN", "Updated Device List: New = $newDeviceCount, Updated = $updatedDeviceCount")
         }
     }
+
+
 
     // 🔹 RecyclerView 목록 초기화
     private fun clearDeviceList() {
@@ -232,7 +238,6 @@ class MainActivity : AppCompatActivity() {
 
     // JSON 문자열을 DeviceModel 리스트로 변환하는 함수
     private fun parseDevice(simulatedJson: List<String>): List<DeviceModel> {
-        val gson = Gson()
         val deviceList = mutableListOf<DeviceModel>()
 
         for (jsonString in simulatedJson) {
@@ -246,11 +251,16 @@ class MainActivity : AppCompatActivity() {
                 val advObject = jsonObject.getAsJsonObject("ADV")
 
                 val deviceName = advObject?.get("Device Name")?.asString ?: "Unknown"
-                val manufacturerData = advObject?.get("Manufacturer Data")?.asString
-                val serviceUuids = advObject?.get("Service UUIDs")?.asString
-                val serviceData = advObject?.get("Service Data")?.asString
+                val manufacturerDataHex = advObject?.get("Manufacturer Data")?.asString
+                val serviceUuidsHex = advObject?.get("Service UUIDs")?.asString
+                val serviceDataHex = advObject?.get("Service Data")?.asString
 
-                // DeviceModel 객체 생성 및 리스트 추가
+                // 🔹 HEX → ASCII 변환 적용
+                val manufacturerData = manufacturerDataHex?.let { BLEUtils.hexToAscii(it) }
+                val serviceUuids = serviceUuidsHex?.let { BLEUtils.hexToAscii(it) }
+                val serviceData = serviceDataHex?.let { BLEUtils.hexToAscii(it) }
+
+                // DeviceModel 생성 및 리스트 추가
                 deviceList.add(
                     DeviceModel(
                         name = deviceName,
@@ -266,17 +276,9 @@ class MainActivity : AppCompatActivity() {
                 e.printStackTrace()
             }
         }
-
         return deviceList
     }
 
-    // Hex 문자열을 바이트 배열로 변환하는 함수
-    private fun hexStringToByteArray(hexString: String): ByteArray {
-        return hexString.split(" ")
-            .filter { it.isNotEmpty() }
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-    }
 
     // JSON 기반 가짜 BLE 장치 데이터 생성
     private fun generateDeviceJson(): List<String> {
@@ -422,13 +424,23 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
         )
 
-        // 10개 중 랜덤으로 1~6개 선택하여 RSSI 및 TX Power 값을 변경
+
         return bleDataList.shuffled().take(Random.nextInt(1, 6)).map { jsonString ->
             val jsonObject = gson.fromJson(jsonString, JsonObject::class.java)
 
-            // RSSI 및 TX Power Level을 랜덤 값으로 설정
+            // 🔹 RSSI 및 TX Power Level을 랜덤 값으로 설정
             jsonObject.addProperty("RSSI", Random.nextInt(-100, -50))
             jsonObject.addProperty("TX Power Level", Random.nextInt(-30, 0))
+
+            // 🔹 Service Data 및 Manufacturer Data를 HEX로 변환
+            jsonObject.getAsJsonObject("ADV")?.apply {
+                get("Service Data")?.asString?.let {
+                    addProperty("Service Data", BLEUtils.asciiToHex(it))  // ✅ ASCII → HEX 변환
+                }
+                get("Manufacturer Data")?.asString?.let {
+                    addProperty("Manufacturer Data", BLEUtils.asciiToHex(it))  // ✅ ASCII → HEX 변환
+                }
+            }
 
             gson.toJson(jsonObject)
         }
