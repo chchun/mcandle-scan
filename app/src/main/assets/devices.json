@@ -1,0 +1,71 @@
+[
+  {
+    "MAC": "1E:95:39:87:B7:66",
+    "ADV_org": "1EFF06000010F202281F45B31190C69A607079F44C6B77555B0B7811159036D",
+    "ADV": {
+      "Manufacturer Data": "06 00 01 0F 20 22 81 F4 5B 31 19 0C 69 A6 07 07 9F 44 C6 B7 75 55 B0 B7 81 11 59 03 6D"
+    },
+    "RSSI": "-71",
+    "TX Power Level": "-10",
+    "Timestamp": 1739263607589
+  },
+  {
+    "MAC": "Z4:4D:BD:F2:AD:36",
+    "ADV_org": "02010613095641524C30363432303330331303030320303A00203FF0201",
+    "ADV": {
+      "Flags": "06",
+      "Device Name": "VARL063030010002",
+      "Service UUIDs": "A0 02",
+      "Service Data": "chchun",
+      "Manufacturer Data": "02 01"
+    },
+    "RSSI": "-75",
+    "TX Power Level": "-15",
+    "Timestamp": 1739263607592
+  },
+  {
+    "MAC": "A1:B2:C3:D4:E5:F6",
+    "ADV_org": "1EFF0201060302AABBCCDDEE",
+    "ADV": {
+      "Manufacturer Data": "02 01 AA BB CC DD EE"
+    },
+    "RSSI": "-60",
+    "TX Power Level": "-5",
+    "Timestamp": 1739263607600
+  },
+  {
+    "MAC": "B2:C3:D4:E5:F6:A1",
+    "ADV_org": "0201060503CCDD0011223344",
+    "ADV": {
+      "Flags": "05",
+      "Device Name": "Smart Sensor",
+      "Manufacturer Data": "CC DD 00 11 22 33 44"
+    },
+    "RSSI": "-68",
+    "TX Power Level": "-12",
+    "Timestamp": 1739263607610
+  },
+  {
+    "MAC": "C3:D4:E5:F6:A1:B2",
+    "ADV_org": "1EFF06010A0B0C0D0E0F",
+    "ADV": {
+      "Manufacturer Data": "06 01 0A 0B 0C 0D 0E 0F"
+    },
+    "RSSI": "-55",
+    "TX Power Level": "-20",
+    "Timestamp": 1739263607620
+  },
+  {
+    "MAC": "D4:E5:F6:A1:B2:C3",
+    "ADV_org": "0201060906AABBCCDDEEFF",
+    "ADV": {
+      "Flags": "09",
+      "Device Name": "BLE Tracker",
+      "Service UUIDs": "CC DD EE FF",
+      "Manufacturer Data": "AA BB CC DD EE FF"
+    },
+    "RSSI": "-50",
+    "TX Power Level": "-18",
+    "Timestamp": 1739263607630
+  }
+]

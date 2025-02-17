@@ -1,5 +1,6 @@
 package com.mcandle.blescan
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -18,8 +19,10 @@ import retrofit2.Callback
 import retrofit2.Response
 import kotlin.random.Random
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.io.InputStreamReader
 
 class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
@@ -94,9 +97,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 🔹 BLE 장치 클릭 시 실행할 동작 (MainActivity에서 직접 처리)
+
     private fun onDeviceSelected(serviceData: String) {
         if (isServerMode) {
-              fetchMemberInfo(serviceData) // 서버에서 멤버십 정보 조회
+            val serviceData_ascii = serviceData.let { BLEUtils.hexToAscii(it) } ?: ""
+            fetchMemberInfo(serviceData_ascii) // 서버에서 멤버십 정보 조회
         } else {
             Toast.makeText(this, "Server Mode가 비활성화되어 있습니다.", Toast.LENGTH_SHORT).show()
         }
@@ -142,7 +147,7 @@ class MainActivity : AppCompatActivity() {
         if (isSimulated) {
             lifecycleScope.launch(Dispatchers.IO) {
                 delay(2000)
-                val simulatedJson = generateDeviceJson()
+                val simulatedJson = generateDeviceJson(applicationContext)
                 val simulatedDevices = parseDevice(simulatedJson)
                 updateDeviceList(simulatedDevices)
             }
@@ -279,155 +284,27 @@ class MainActivity : AppCompatActivity() {
         return deviceList
     }
 
-
-    // JSON 기반 가짜 BLE 장치 데이터 생성
-    private fun generateDeviceJson(): List<String> {
+    private fun generateDeviceJson(context: Context): List<String> {
         val gson = Gson()
+        val deviceList = mutableListOf<JsonObject>()
 
-        val bleDataList = listOf(
-            """
-        {
-          "MAC": "1E:95:39:87:B7:66",
-          "ADV_org": "1EFF06000010F202281F45B31190C69A607079F44C6B77555B0B7811159036D",
-          "ADV": {
-            "Manufacturer Data": "06 00 01 0F 20 22 81 F4 5B 31 19 0C 69 A6 07 07 9F 44 C6 B7 75 55 B0 B7 81 11 59 03 6D"
-          },
-          "RSSI": "-71",
-          "TX Power Level": "-10",
-          "Timestamp": 1739263607589
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "Z4:4D:BD:F2:AD:36",
-          "ADV_org": "02010613095641524C30363432303330331303030320303A00203FF0201",
-          "ADV": {
-            "Flags": "06 ",
-            "Device Name": "VARL063030010002",
-            "Service UUIDs": "A0 02 ",
-            "Service Data": "chchun",
-            "Manufacturer Data": "02 01 "
-          },
-          "RSSI": "-75",
-          "TX Power Level": "-15",
-          "Timestamp": 1739263607592
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "A1:B2:C3:D4:E5:F6",
-          "ADV_org": "1EFF0201060302AABBCCDDEE",
-          "ADV": {
-            "Manufacturer Data": "02 01 AA BB CC DD EE"
-          },
-          "RSSI": "-60",
-          "TX Power Level": "-5",
-          "Timestamp": 1739263607600
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "B2:C3:D4:E5:F6:A1",
-          "ADV_org": "0201060503CCDD0011223344",
-          "ADV": {
-            "Flags": "05",
-            "Device Name": "Smart Sensor",
-            "Manufacturer Data": "CC DD 00 11 22 33 44"
-          },
-          "RSSI": "-68",
-          "TX Power Level": "-12",
-          "Timestamp": 1739263607610
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "C3:D4:E5:F6:A1:B2",
-          "ADV_org": "1EFF06010A0B0C0D0E0F",
-          "ADV": {
-            "Manufacturer Data": "06 01 0A 0B 0C 0D 0E 0F"
-          },
-          "RSSI": "-55",
-          "TX Power Level": "-20",
-          "Timestamp": 1739263607620
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "D4:E5:F6:A1:B2:C3",
-          "ADV_org": "0201060906AABBCCDDEEFF",
-          "ADV": {
-            "Flags": "09",
-            "Device Name": "BLE Tracker",
-            "Service UUIDs": "CC DD EE FF",
-            
-            "Manufacturer Data": "AA BB CC DD EE FF"
-          },
-          "RSSI": "-50",
-          "TX Power Level": "-18",
-          "Timestamp": 1739263607630
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "E5:F6:A1:B2:C3:D4",
-          "ADV_org": "1EFF020106000A0B0C0D",
-          "ADV": {
-            "Manufacturer Data": "02 01 06 00 0A 0B 0C 0D"
-          },
-          "RSSI": "-85",
-          "TX Power Level": "-25",
-          "Timestamp": 1739263607640
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "F6:A1:B2:C3:D4:E5",
-          "ADV_org": "0201061234AABBCCDDEEFFFF",
-          "ADV": {
-            "Flags": "12",
-            "Device Name": "Smart Lock",
-            "Service UUIDs": "AA BB CC DD EE FF FF",
-            "Service data": "test",
-            "Manufacturer Data": "FF FF 00 11 22 33 44"
-          },
-          "RSSI": "-73",
-          "TX Power Level": "-7",
-          "Timestamp": 1739263607650
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "A1:A2:A3:A4:A5:A6",
-          "ADV_org": "1EFF02010B0C0D0E0F",
-          "ADV": {
-            "Manufacturer Data": "02 01 0B 0C 0D 0E 0F"
-          },
-          "RSSI": "-69",
-          "TX Power Level": "-22",
-          "Timestamp": 1739263607660
-        }
-        """.trimIndent(),
-            """
-        {
-          "MAC": "B2:B3:B4:B5:B6:B7",
-          "ADV_org": "0201061415161718191A1B1C1D",
-          "ADV": {
-            "Flags": "14",
-            "Device Name": "Smart Plug",
-            "Service UUIDs": "15 16 17 18 19 1A 1B 1C 1D",
-            "Manufacturer Data": "1E 1F 20 21 22 23 24 25"
-          },
-          "RSSI": "-80",
-          "TX Power Level": "-27",
-          "Timestamp": 1739263607670
-        }
-        """.trimIndent()
-        )
+        try {
+            // 🔹 assets에서 devices.json 읽기
+            val inputStream = context.assets.open("devices.json")
+            val reader = InputStreamReader(inputStream)
+            val jsonArray = gson.fromJson(reader, JsonArray::class.java)
 
+            for (jsonElement in jsonArray) {
+                if (jsonElement is JsonObject) {
+                    deviceList.add(jsonElement)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        return bleDataList.shuffled().take(Random.nextInt(1, 6)).map { jsonString ->
-            val jsonObject = gson.fromJson(jsonString, JsonObject::class.java)
-
+        // 🔹 랜덤으로 장치 개수 선택 (1~5개)
+        return deviceList.shuffled().take(Random.nextInt(1, 6)).map { jsonObject ->
             // 🔹 RSSI 및 TX Power Level을 랜덤 값으로 설정
             jsonObject.addProperty("RSSI", Random.nextInt(-100, -50))
             jsonObject.addProperty("TX Power Level", Random.nextInt(-30, 0))
@@ -435,10 +312,10 @@ class MainActivity : AppCompatActivity() {
             // 🔹 Service Data 및 Manufacturer Data를 HEX로 변환
             jsonObject.getAsJsonObject("ADV")?.apply {
                 get("Service Data")?.asString?.let {
-                    addProperty("Service Data", BLEUtils.asciiToHex(it))  // ✅ ASCII → HEX 변환
+                    addProperty("Service Data", BLEUtils.asciiToHex(it))
                 }
                 get("Manufacturer Data")?.asString?.let {
-                    addProperty("Manufacturer Data", BLEUtils.asciiToHex(it))  // ✅ ASCII → HEX 변환
+                    addProperty("Manufacturer Data", BLEUtils.asciiToHex(it))
                 }
             }
 
