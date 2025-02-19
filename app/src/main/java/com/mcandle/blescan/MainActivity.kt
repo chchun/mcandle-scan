@@ -23,6 +23,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.InputStreamReader
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
@@ -233,7 +234,6 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-
     // 🔹 RecyclerView 목록 초기화
     private fun clearDeviceList() {
         deviceList.clear()
@@ -262,7 +262,8 @@ class MainActivity : AppCompatActivity() {
 
                 // 🔹 HEX → ASCII 변환 적용
                 val manufacturerData = manufacturerDataHex?.let { BLEUtils.hexToAscii(it) }
-                val serviceUuids = serviceUuidsHex?.let { BLEUtils.hexToAscii(it) }
+                //val serviceUuids = serviceUuidsHex?.let { BLEUtils.hexToAscii(it) }
+                val serviceUuids = serviceUuidsHex
                 val serviceData = serviceDataHex?.let { BLEUtils.hexToAscii(it) }
 
                 // DeviceModel 생성 및 리스트 추가
@@ -284,42 +285,57 @@ class MainActivity : AppCompatActivity() {
         return deviceList
     }
 
-    private fun generateDeviceJson(context: Context): List<String> {
+    private fun generateDeviceJson(context: Context, useRemoteJson: Boolean = true): List<String> {
         val gson = Gson()
         val deviceList = mutableListOf<JsonObject>()
+        val useRemoteJson = true
 
-        try {
-            // 🔹 assets에서 devices.json 읽기
-            val inputStream = context.assets.open("devices.json")
-            val reader = InputStreamReader(inputStream)
-            val jsonArray = gson.fromJson(reader, JsonArray::class.java)
+        return try {
+            if (useRemoteJson) {
+                // 🔹 Render 서버에서 JSON 데이터 가져오기
+                val url = "https://json-render-d4wv.onrender.com/devices.json"
+                val jsonString = URL(url).readText()
 
-            for (jsonElement in jsonArray) {
-                if (jsonElement is JsonObject) {
-                    deviceList.add(jsonElement)
+                val jsonArray = gson.fromJson(jsonString, JsonArray::class.java)
+                for (jsonElement in jsonArray) {
+                    if (jsonElement is JsonObject) {
+                        deviceList.add(jsonElement)
+                    }
                 }
+            } else {
+                // 🔹 assets 폴더에서 devices.json 로드
+                val inputStream = context.assets.open("devices.json")
+                val reader = InputStreamReader(inputStream)
+                val jsonArray = gson.fromJson(reader, JsonArray::class.java)
+
+                for (jsonElement in jsonArray) {
+                    if (jsonElement is JsonObject) {
+                        deviceList.add(jsonElement)
+                    }
+                }
+            }
+
+            // 🔹 랜덤으로 장치 개수 선택 (1~5개)
+            deviceList.shuffled().take(Random.nextInt(1, 6)).map { jsonObject ->
+                // 🔹 RSSI 및 TX Power Level을 랜덤 값으로 설정
+                jsonObject.addProperty("RSSI", Random.nextInt(-100, -50))
+                jsonObject.addProperty("TX Power Level", Random.nextInt(-30, 0))
+
+                // 🔹 Service Data 및 Manufacturer Data를 HEX로 변환
+                jsonObject.getAsJsonObject("ADV")?.apply {
+                    get("Service Data")?.asString?.let {
+                        addProperty("Service Data", BLEUtils.asciiToHex(it))
+                    }
+                    get("Manufacturer Data")?.asString?.let {
+                        addProperty("Manufacturer Data", BLEUtils.asciiToHex(it))
+                    }
+                }
+
+                gson.toJson(jsonObject)
             }
         } catch (e: Exception) {
             e.printStackTrace()
-        }
-
-        // 🔹 랜덤으로 장치 개수 선택 (1~5개)
-        return deviceList.shuffled().take(Random.nextInt(1, 6)).map { jsonObject ->
-            // 🔹 RSSI 및 TX Power Level을 랜덤 값으로 설정
-            jsonObject.addProperty("RSSI", Random.nextInt(-100, -50))
-            jsonObject.addProperty("TX Power Level", Random.nextInt(-30, 0))
-
-            // 🔹 Service Data 및 Manufacturer Data를 HEX로 변환
-            jsonObject.getAsJsonObject("ADV")?.apply {
-                get("Service Data")?.asString?.let {
-                    addProperty("Service Data", BLEUtils.asciiToHex(it))
-                }
-                get("Manufacturer Data")?.asString?.let {
-                    addProperty("Manufacturer Data", BLEUtils.asciiToHex(it))
-                }
-            }
-
-            gson.toJson(jsonObject)
+            emptyList()
         }
     }
 }
