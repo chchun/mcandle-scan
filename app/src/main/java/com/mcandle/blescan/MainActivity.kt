@@ -24,9 +24,14 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.InputStreamReader
 
+import vpos.apipackage.At
+import vpos.apipackage.Beacon
+
+import com.mcandle.blescan.ble.BleManager
+
 class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
-    private lateinit var adapter: BLEDeviceAdapter
+
     private lateinit var btnScan: Button
     private lateinit var btnNScan: Button
     private lateinit var btnClear: Button
@@ -35,9 +40,15 @@ class MainActivity : AppCompatActivity() {
 
     private var isScanning = false
     private var scanJob: Job? = null
-    private val deviceList = mutableListOf<DeviceModel>()
+
     private var useSimulatorMode = true  // 시뮬레이션 모드 사용 여부
     private var isServerMode = true      // 서버 모드 사용 여부
+    private var useRemoteJson = true    // isServerMode 일때  json을 render에서 가져올지
+
+    private lateinit var bleManager: BleManager
+    private val deviceList = mutableListOf<DeviceModel>()
+    private lateinit var adapter: BLEDeviceAdapter
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +62,18 @@ class MainActivity : AppCompatActivity() {
         btnNScan = findViewById(R.id.btnNScan)
         btnClear = findViewById(R.id.btnClear)
 
+    // ✅ 해결: bleManager를 먼저 초기화한 후 사용
+        bleManager = BleManager.getInstance(this)
+
+        // 🔹 BleManager가 데이터를 업데이트하면 UI 갱신
+        bleManager.setUpdateListener { newDevices ->
+            runOnUiThread {
+                deviceList.clear()
+                deviceList.addAll(newDevices)
+                adapter.notifyDataSetChanged()  // ✅ UI 업데이트는 MainActivity에서 수행
+            }
+        }
+
         // 🔹 RecyclerView Adapter 초기화 (클릭 이벤트 MainActivity에서 처리)
         adapter = BLEDeviceAdapter(deviceList, ::onDeviceSelected)
         recyclerView.adapter = adapter
@@ -63,6 +86,17 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, mode, Toast.LENGTH_SHORT).show()
         }
 
+        // 🔹 스캔 상태 변경 시 UI 업데이트 리스너 설정
+        bleManager.setScanStatusListener { isScanning ->
+            runOnUiThread {
+                btnNScan.text = if (isScanning) "Stop" else "n Scan"
+                btnScan.isEnabled = !isScanning
+                btnClear.isEnabled = !isScanning
+                switchSimul.isEnabled = !isScanning
+                switchServer.isEnabled = !isScanning
+            }
+        }
+
         // 🔹 Simul Mode 스위치 리스너 추가
         switchSimul.isChecked = useSimulatorMode
         switchSimul.setOnCheckedChangeListener { _, isChecked ->
@@ -70,12 +104,16 @@ class MainActivity : AppCompatActivity() {
             val mode = if (isChecked) "Simulated" else "Real"
             clearDeviceList()
             Toast.makeText(this, "Mode: $mode", Toast.LENGTH_SHORT).show()
+            if (!useSimulatorMode) {
+                initData()
+            }
         }
 
         // 🔹 Scan 버튼 클릭 리스너 (1회 스캔)
         btnScan.setOnClickListener {
-            startScan(useSimulatorMode)
-
+            lifecycleScope.launch {
+                bleManager.startScan(useSimulatorMode, useRemoteJson)
+            }
         }
 
         // 🔹 n Scan 버튼 클릭 리스너 (반복 스캔)
@@ -86,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                 if (deviceList.isNotEmpty()) {
                     clearDeviceList()
                 }
-                startScanLoop(useSimulatorMode)
+                bleManager.startScanLoop(useSimulatorMode, useRemoteJson)
             }
         }
 
@@ -94,10 +132,25 @@ class MainActivity : AppCompatActivity() {
         btnClear.setOnClickListener {
             clearDeviceList()
         }
+
+    }
+
+    private fun initData() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val mac = arrayOf("")
+            val ret = At.Lib_GetAtMac(mac)
+            val message = if (ret == 0) {
+                "Hello Beacon-${mac[0]} !"
+            } else {
+                "Lib_GetAtMac Error : $ret!"
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // 🔹 BLE 장치 클릭 시 실행할 동작 (MainActivity에서 직접 처리)
-
     private fun onDeviceSelected(serviceData: String) {
         if (isServerMode) {
             val serviceData_ascii = serviceData.let { BLEUtils.hexToAscii(it) } ?: ""
@@ -137,54 +190,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // 🔹 BLE 실제 스캔 함수 (BLE 장치 검색)
-    private fun startScan(isSimulated: Boolean) {
-        Log.d("BLE_SCAN", "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}")
-        runOnUiThread {
-            Toast.makeText(this, "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
-        }
-
-        if (isSimulated) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                delay(2000)
-                val simulatedJson = generateDeviceJson(applicationContext)
-                val simulatedDevices = parseDevice(simulatedJson)
-                updateDeviceList(simulatedDevices)
-            }
-        } else {
-            lifecycleScope.launch(Dispatchers.IO) {
-                delay(3000)
-                val newDevice = DeviceModel(
-                    name = "BLE Device ${Random.nextInt(100, 999)}",
-                    address = "00:11:22:33:${Random.nextInt(10, 99)}",
-                    rssi = Random.nextInt(-100, -50)
-                )
-                updateDeviceList(listOf(newDevice))
-            }
-        }
-
-    }
-
-    // 🔹 n Scan 실행 (반복 스캔)
-    private fun startScanLoop(isSimulated: Boolean) {
-        isScanning = true
-        btnNScan.text = "Stop"
-        btnScan.isEnabled = false
-        btnClear.isEnabled = false
-        switchSimul.isEnabled = false
-        switchServer.isEnabled = false
-
-        // 🔹 Toast를 UI 스레드에서 실행하도록 변경
-        runOnUiThread {
-            Toast.makeText(this, "Continuous Scan Started", Toast.LENGTH_SHORT).show()
-        }
-        scanJob = lifecycleScope.launch(Dispatchers.IO) {
-            while (isScanning) {
-                startScan(isSimulated)
-                delay(5000)
-            }
-        }
-    }
 
     // 🔹 n Scan 중지 (반복 스캔 종료)
     private fun stopScanLoop() {
@@ -198,40 +203,6 @@ class MainActivity : AppCompatActivity() {
 
         Toast.makeText(this, "Scan Stopped", Toast.LENGTH_SHORT).show()
     }
-
-    // 🔹 RecyclerView 목록 업데이트 함수 (중복 변환 제거)
-    private suspend fun updateDeviceList(newDevices: List<DeviceModel>) {
-        withContext(Dispatchers.Main) {
-            var newDeviceCount = 0
-            var updatedDeviceCount = 0
-
-            // 기존 장치 중에서 이번 스캔에 포함되지 않은 장치를 비활성화 (RSSI -100)
-            for (device in deviceList) {
-                if (newDevices.none { it.address == device.address }) {
-                    device.rssi = -100
-                }
-            }
-
-            // 신규 및 업데이트된 장치 처리 (HEX 값 그대로 유지)
-            for (newDevice in newDevices) {
-                val existingDevice = deviceList.find { it.address == newDevice.address }
-
-                if (existingDevice != null) {
-                    existingDevice.rssi = newDevice.rssi
-                    existingDevice.manufacturerData = newDevice.manufacturerData  // ✅ 변환 제거
-                    existingDevice.serviceData = newDevice.serviceData  // ✅ 변환 제거
-                    updatedDeviceCount++
-                } else {
-                    deviceList.add(newDevice) // ✅ 그대로 추가
-                    newDeviceCount++
-                }
-            }
-
-            adapter.notifyDataSetChanged()
-            Log.d("BLE_SCAN", "Updated Device List: New = $newDeviceCount, Updated = $updatedDeviceCount")
-        }
-    }
-
 
 
     // 🔹 RecyclerView 목록 초기화
@@ -322,4 +293,72 @@ class MainActivity : AppCompatActivity() {
             gson.toJson(jsonObject)
         }
     }
+
+    private fun vpos_startScan() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val sharedPreferences = getSharedPreferences("scanInfo", MODE_PRIVATE)
+            val macAddress = sharedPreferences.getString("macAddress", "")
+            val broadcastName = sharedPreferences.getString("broadcastName", "")
+            val rssi = sharedPreferences.getString("rssi", "0")?.toIntOrNull() ?: 0
+            val manufacturerId = sharedPreferences.getString("manufacturerId", "")
+            val data = sharedPreferences.getString("data", "")
+
+            Log.e("TAG", "Start Scan with: MAC=$macAddress, Name=$broadcastName, RSSI=$rssi, Manufacturer=$manufacturerId, Data=$data")
+
+            val ret = At.Lib_AtStartNewScan(macAddress, broadcastName, -rssi, manufacturerId, data)
+
+            withContext(Dispatchers.Main) {
+                if (ret == 0) {
+                    Toast.makeText(this@MainActivity, "Scanning started successfully", Toast.LENGTH_SHORT).show()
+                    lifecycleScope.launch(Dispatchers.IO) { recvScanData() }
+                } else {
+                    Toast.makeText(this@MainActivity, "Error while scanning, ret = $ret", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+
+    private suspend fun recvScanData() {
+        val recvData = ByteArray(2048)
+        val recvDataLen = IntArray(2)
+
+        while (isScanning) {
+            val ret = At.Lib_ComRecvAT(recvData, recvDataLen, 20, 1000)
+            if (ret < 0) {
+                Log.e("Scan", "Failed to receive data")
+                continue
+            }
+
+            val buffer = String(recvData, Charsets.UTF_8)
+            val dataList = buffer.split("\r\n", "\r", "\n")
+
+            val deviceList = mutableListOf<DeviceModel>()
+
+            for (line in dataList) {
+                if (line.startsWith("MAC:")) {
+                    val parts = line.split(",")
+                    val mac = parts[0].split(":")[1]
+                    val rssi = parts[1].split(":")[1].toInt()
+                    val payload = parts[2].split(":")[1]
+
+                    val device = DeviceModel(
+                        name = "Unknown",
+                        address = mac,
+                        rssi = rssi,
+                        serviceData = payload
+                    )
+
+                    deviceList.add(device)
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                //updateDeviceList(deviceList)
+            }
+        }
+    }
+
+
+
 }

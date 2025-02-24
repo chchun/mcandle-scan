@@ -21,5 +21,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "bleapp"
+rootProject.name = "blescan"
 include(":app")
