@@ -45,6 +45,14 @@ class BleManager(private val context: Context) {
         }
     }
 
+    suspend fun getDeviceMacAddress(): String? {
+        return withContext(Dispatchers.IO) {
+            val macAddress = arrayOfNulls<String>(1)
+            val ret = At.Lib_GetAtMac(macAddress)
+            if (ret == 0) macAddress[0] else null
+        }
+    }
+
     suspend fun startScan(isSimulated: Boolean, useRemoteJson: Boolean = true) {
         withContext(Dispatchers.IO) {
             Log.d("BLE_SCAN", "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}")
