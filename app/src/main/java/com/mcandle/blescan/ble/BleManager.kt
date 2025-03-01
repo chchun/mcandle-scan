@@ -18,6 +18,7 @@ import kotlin.random.Random
 
 class BleManager(private val context: Context) {
     private val deviceList = mutableListOf<DeviceModel>()
+    private var isMaster: Boolean = true // 🔹 Master/Beacon 모드 상태 변수 추가
 
     // 🔹 UI 업데이트를 위한 콜백 (MainActivity에서 설정)
     private var updateListener: ((List<DeviceModel>) -> Unit)? = null
@@ -53,6 +54,18 @@ class BleManager(private val context: Context) {
         }
     }
 
+    suspend fun enableMasterMode(enable: Boolean): Int {
+        return withContext(Dispatchers.IO) {
+            if (isMaster == enable) {
+                Log.d("BLE_MANAGER", "Already in the requested mode. No changes made.")
+                return@withContext 0 // ✅ 올바른 방식
+            }
+
+            val ret = At.Lib_EnableMaster(enable)
+            return@withContext ret // ✅ 올바른 방식
+        }
+    }
+
     suspend fun startScan(isSimulated: Boolean, useRemoteJson: Boolean = true) {
         withContext(Dispatchers.IO) {
             Log.d("BLE_SCAN", "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}")
@@ -61,7 +74,7 @@ class BleManager(private val context: Context) {
             }
 
             if (isSimulated) {
-                delay(2000)
+                delay(500)
                 val simulatedJson = generateDeviceJson(useRemoteJson)
                 val simulatedDevices = parseDevice(simulatedJson)
                 withContext(Dispatchers.Main) {
@@ -77,54 +90,68 @@ class BleManager(private val context: Context) {
         if (isScanning) return  // 이미 실행 중이면 중복 실행 방지
 
         isScanning = true
-        scanStatusListener?.invoke(true)  // 🔹 UI에서 버튼 상태 변경하도록 콜백 실행
-
-        // 🔹 UI에서 Toast 메시지 표시 (MainActivity에서 처리)
         CoroutineScope(Dispatchers.Main).launch {
-            Toast.makeText(context, "Continuous Scan Started", Toast.LENGTH_SHORT).show()
+            scanStatusListener?.invoke(true) // ✅ UI 스레드에서 실행
         }
 
         scanJob = CoroutineScope(Dispatchers.IO).launch {
+            Log.d("BLE_SCAN", "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
+            }
+
             while (isScanning) {
-                startScan(isSimulated, useRemoteJson)
-                delay(5000)
+                val simulatedJson = generateDeviceJson(useRemoteJson)
+                val simulatedDevices = parseDevice(simulatedJson)
+
+                withContext(Dispatchers.Main) {
+                    updateDeviceList(simulatedDevices)
+                }
+                delay(2000)
             }
         }
     }
 
+    // BleManager.kt
     fun stopScanLoop() {
+        if (!isScanning) return // ✅ 이미 중지 상태면 실행하지 않음.
+
         isScanning = false
         scanJob?.cancel()
-        scanStatusListener?.invoke(false)  // 🔹 UI에서 버튼 상태 변경하도록 콜백 실행
+        scanJob = null
 
-        // 🔹 UI에서 Toast 메시지 표시 (MainActivity에서 처리)
         CoroutineScope(Dispatchers.Main).launch {
+            scanStatusListener?.invoke(false)  // 🔹 UI 상태 업데이트 보장
             Toast.makeText(context, "Scan Stopped", Toast.LENGTH_SHORT).show()
         }
+
+        // 🔹 데이터 초기화
+        deviceList.clear()
+        updateListener?.invoke(emptyList())
+
+        Log.d("BLE_SCAN", "Scan loop stopped.")
     }
 
     fun isCurrentlyScanning(): Boolean {
-        return isScanning
+        return isScanning && scanJob?.isActive == true
     }
 
     private fun vposStartScan() {
         CoroutineScope(Dispatchers.IO).launch {
             val settings = getScanSettings()
             val ret = At.Lib_AtStartNewScan(settings.macAddress, settings.broadcastName, -settings.rssi, settings.manufacturerId, settings.data)
+
             withContext(Dispatchers.Main) {
                 if (ret == 0) {
                     Toast.makeText(context, "Scanning started successfully", Toast.LENGTH_SHORT).show()
-                    startReceivingData()
+                    // 🔹 변경된 코드: recvScanData() 직접 호출
+                    CoroutineScope(Dispatchers.IO).launch {
+                        recvScanData()
+                    }
                 } else {
                     Toast.makeText(context, "Error while scanning, ret = $ret", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
-    }
-
-    private fun startReceivingData() {
-        CoroutineScope(Dispatchers.IO).launch {
-            recvScanData()
         }
     }
 

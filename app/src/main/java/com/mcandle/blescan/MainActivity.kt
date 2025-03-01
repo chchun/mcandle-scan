@@ -2,6 +2,7 @@ package com.mcandle.blescan
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.Switch
 import android.widget.Toast
@@ -16,7 +17,7 @@ import kotlinx.coroutines.*
 import com.mcandle.blescan.ble.BleManager
 import com.mcandle.blescan.ble.SimulManager
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(){
     private lateinit var recyclerView: RecyclerView
 
     private lateinit var btnScan: Button
@@ -25,7 +26,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchSimul: Switch
     private lateinit var switchServer: Switch
 
-    private var isScanning = false
     private var scanJob: Job? = null
 
     private var useSimulatorMode = true  // 시뮬레이션 모드 사용 여부
@@ -77,13 +77,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 🔹 스캔 상태 변경 시 UI 업데이트 리스너 설정
-        bleManager.setScanStatusListener { isScanning ->
+        bleManager.setScanStatusListener { isScanningState ->
             runOnUiThread {
-                btnNScan.text = if (isScanning) "Stop" else "n Scan"
-                btnScan.isEnabled = !isScanning
-                btnClear.isEnabled = !isScanning
-                switchSimul.isEnabled = !isScanning
-                switchServer.isEnabled = !isScanning
+                val scanning = bleManager.isCurrentlyScanning() // 🔹 현재 스캔 상태 확인
+                btnNScan.text = if (scanning) "Stop" else "Simul"
+                btnScan.isEnabled = !scanning
+                btnClear.isEnabled = !scanning
+                switchSimul.isEnabled = !scanning
+                switchServer.isEnabled = !scanning
             }
         }
 
@@ -108,12 +109,10 @@ class MainActivity : AppCompatActivity() {
 
         // 🔹 n Scan 버튼 클릭 리스너 (반복 스캔)
         btnNScan.setOnClickListener {
-            if (isScanning) {
-                stopScanLoop()
+            if (bleManager.isCurrentlyScanning()) {
+                bleManager.stopScanLoop()
             } else {
-                if (deviceList.isNotEmpty()) {
-                    clearDeviceList()
-                }
+                clearDeviceList()
                 bleManager.startScanLoop(useSimulatorMode, useRemoteJson)
             }
         }
@@ -135,16 +134,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initData() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val mac = bleManager.getDeviceMacAddress()
+        lifecycleScope.launch {
+            // ✅ IO 스레드에서 Master 모드 설정 및 MAC 주소 가져오기
+            val (result, mac) = withContext(Dispatchers.IO) {
+                val result = bleManager.enableMasterMode(true)
+
+                val mac = bleManager.getDeviceMacAddress()  // ✅ MAC 주소 가져오기
+                result to mac // ✅ 두 값을 Pair로 반환
+            }
+
+            // ✅ 로그 출력은 IO 스레드에서 수행
+            if (result == 0) {
+                Log.d("MAIN", "Master mode enabled successfully")
+            } else {
+                Log.e("MAIN", "Failed to enable Master mode, error code: $result")
+            }
+
+            // ✅ UI에서 메시지 출력
             val message = if (mac != null) {
                 "Hello Beacon-$mac !"
             } else {
                 "Failed to retrieve MAC address!"
             }
-            withContext(Dispatchers.Main) {
-                Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -158,24 +170,11 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-
-    // 🔹 n Scan 중지 (반복 스캔 종료)
-    private fun stopScanLoop() {
-        isScanning = false
-        btnNScan.text = "n Scan"
-        btnScan.isEnabled = true
-        btnClear.isEnabled = true
-        switchSimul.isEnabled = true
-        switchServer.isEnabled = true
-        scanJob?.cancel()
-
-        Toast.makeText(this, "Scan Stopped", Toast.LENGTH_SHORT).show()
-    }
-
     // 🔹 RecyclerView 목록 초기화
     private fun clearDeviceList() {
         deviceList.clear()
         adapter.notifyDataSetChanged()
         Toast.makeText(this, "목록이 초기화되었습니다.", Toast.LENGTH_SHORT).show()
     }
+
 }
