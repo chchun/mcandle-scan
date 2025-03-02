@@ -1,27 +1,22 @@
 package com.mcandle.blescan.ble
 
+
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import android.widget.Toast
-
-import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
-
-import java.util.HashMap
-
-
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-
-import kotlinx.coroutines.*
-import vpos.apipackage.At
-import java.io.InputStreamReader
 import com.mcandle.blescan.DeviceModel
 import com.mcandle.blescan.utils.BLEUtils
+import kotlinx.coroutines.*
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import vpos.apipackage.At
+import java.io.InputStreamReader
 import java.net.URL
 import kotlin.random.Random
 
@@ -208,36 +203,6 @@ class BleManager(private val context: Context) {
         return isScanning && scanJob?.isActive == true
     }
 
-    private fun vposStartScan() {
-        val sp: SharedPreferences = context.getSharedPreferences("scanInfo", Context.MODE_PRIVATE)
-        Log.e("TAG", "startScan: macAddress: ${sp.getString("macAddress", "")}")
-        Log.e("TAG", "startScan: broadcastName: ${sp.getString("broadcastName", "")}")
-        Log.e("TAG", "startScan: rssi: ${sp.getString("rssi", "")}")
-        Log.e("TAG", "startScan: manufacturerId: ${sp.getString("manufacturerId", "")}")
-        Log.e("TAG", "startScan: data: ${sp.getString("data", "")}")
-
-        var ret = At.Lib_AtStartNewScan(
-            sp.getString("macAddress", ""),
-            sp.getString("broadcastName", ""),
-            -sp.getString("rssi", "0")!!.toInt(),
-            sp.getString("manufacturerId", ""),
-            sp.getString("data", "")
-        )
-
-        if (ret == 0) {
-            isScanning = true
-            CoroutineScope(Dispatchers.IO).launch {
-                recvScanData()
-            }
-        }
-
-        if (ret == 0) {
-            SendPromptMsg("NEW DEVICE DISCOVERED\n")
-        } else {
-            SendPromptMsg("ERROR WHILE SCANNING, RET = $ret\n")
-        }
-
-    }
 
     private fun getScanSettings(): ScanSettings {
         val sharedPreferences: SharedPreferences = context.getSharedPreferences("scanInfo", Context.MODE_PRIVATE)
@@ -386,7 +351,7 @@ class BleManager(private val context: Context) {
         }
     }
 
-    @Throws(JSONException::class)
+
     fun parseAdvertisementData(advertisementData: ByteArray): JSONObject? {
 //        Map<String, String> parsedData = new HashMap<>();
 //        byte[] advertisementData =new byte[advertiseData.length()/2];
@@ -483,6 +448,8 @@ class BleManager(private val context: Context) {
                 val buff = lineLeft + String(recvData, 0, recvDataLen[0])
                 // String []data=buff.split("\r\n|\r|\n");
                 val data = buff.split("\\r\\n|\\r|\\n".toRegex()).toTypedArray()
+                Log.e("TAG", "runLib_ComRecvAT: buff\n" + buff)
+                Log.e("TAG", "runLib_ComRecvAT: data\n" + data.size)
                 //Log.e("TAG", "debug crash position:echo21" );
                 val lineCount = data.size
                 // if(lineCount>0)//each time response data left last line ,for maybe data not recv all.
@@ -592,24 +559,77 @@ class BleManager(private val context: Context) {
                 }
 
                 val jsonArray = JSONArray(deviceMap.values)
+                Log.e("TAG", "jsonArray" + jsonArray)
 
-                // JSON 변환 후 DeviceModel 리스트 생성 및 업데이트
-                //val jsonDevices = deviceMap.values.mapNotNull { parseJsonToDeviceModel(it) }
-                //withContext(Dispatchers.Main) {
-                //    updateDeviceList(jsonDevices)
-                //}
+                try {
+                    val bledDevices =  parseDevice2("" + jsonArray.toString(4))
+                    withContext(Dispatchers.Main) {
+                        updateDeviceList(bledDevices)
+                    }
+                } catch (e: JSONException) {
+                    throw RuntimeException(e)
+                }
+
+                delay(2000)
             }
-        }
+        } //
     }
 }
 private fun SendPromptMsg(msg: String) {
     Log.e("TAG", "UI Message: $msg") // UI 메시지를 로그로 출력
 }
 
-private fun SendPromptScanMsg(msg: String) {
-    Log.e("TAG", "Scan Data: $msg") // UI 메시지를 로그로 출력
-}
 
+fun parseDevice2(strInfo: String?): List<DeviceModel> {
+    val newDeviceList = mutableListOf<DeviceModel>()
+
+    // strInfo가 null일 경우 빈 문자열로 처리
+    val safeStrInfo = strInfo ?: ""
+
+    if (safeStrInfo.isNullOrEmpty()) {
+//        deviceAdapter.removeDisappearDevice()
+    } else {
+        try {
+            Log.e("TAG", "handleMessage: $safeStrInfo")
+            val jsonArray = JSONArray(safeStrInfo)
+
+            for (i in 0 until jsonArray.length()) {
+                var deviceName: String? = null
+                var uuid: String? = null
+
+                if (jsonArray.getJSONObject(i).has("ADV")) {
+                    val objADV = jsonArray.getJSONObject(i).getJSONObject("ADV")
+                    if (objADV.has("Service UUIDs")) uuid = objADV.getString("Service UUIDs")
+                    if (objADV.has("Device Name")) deviceName = objADV.getString("Device Name")
+                }
+                //                                JSONObject objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP");
+//                                JSONObject objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP");
+                if (jsonArray.getJSONObject(i).has("RSP")) {
+                    val objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP")
+                    if (objRsp.has("Service UUIDs")) uuid = objRsp.getString("Service UUIDs")
+                    if (objRsp.has("Device Name")) deviceName = objRsp.getString("Device Name")
+                }
+
+                // DeviceModel 생성 및 리스트 추가
+                newDeviceList.add(
+                    DeviceModel(
+                        name = deviceName ?: "Unknown", // deviceName이 null이면 "Unknown"을 넣음
+                        address =jsonArray.getJSONObject(i).getString("MAC"),
+                        rssi = jsonArray.getJSONObject(i).getInt("RSSI"),
+                        //txPower = txPower,
+                        //manufacturerData = manufacturerData,
+                        serviceUuids = uuid?: ""
+                        //rviceData = serviceData
+                    )
+                )
+            }
+            //                            deviceAdapter.setDeviceList(newDeviceList);
+        } catch (e: JSONException) {
+            throw java.lang.RuntimeException(e)
+        }
+    }
+    return newDeviceList
+}
 
 data class ScanSettings(
     val macAddress: String,
