@@ -1,6 +1,5 @@
 package com.mcandle.blescan
 
-import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -55,6 +54,11 @@ class MainActivity : AppCompatActivity(){
         bleManager = BleManager.getInstance(this)
         simulManager = SimulManager.getInstance(this)
 
+        // 🔹 RecyclerView Adapter 초기화 (클릭 이벤트 MainActivity에서 처리)
+        adapter = BLEDeviceAdapter(deviceList, ::onDeviceSelected)
+        recyclerView.adapter = adapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
+
         // 🔹 BleManager가 데이터를 업데이트하면 UI 갱신
         bleManager.setUpdateListener { newDevices ->
             runOnUiThread {
@@ -63,12 +67,6 @@ class MainActivity : AppCompatActivity(){
                 adapter.notifyDataSetChanged()  // ✅ UI 업데이트는 MainActivity에서 수행
             }
         }
-
-        // 🔹 RecyclerView Adapter 초기화 (클릭 이벤트 MainActivity에서 처리)
-        adapter = BLEDeviceAdapter(deviceList, ::onDeviceSelected)
-        recyclerView.adapter = adapter
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
         // 🔹 Server 모드 스위치 리스너 추가
         switchServer.setOnCheckedChangeListener { _, isChecked ->
             isServerMode = isChecked
@@ -76,8 +74,19 @@ class MainActivity : AppCompatActivity(){
             Toast.makeText(this, mode, Toast.LENGTH_SHORT).show()
         }
 
-        // 🔹 스캔 상태 변경 시 UI 업데이트 리스너 설정
-        bleManager.setScanStatusListener { isScanningState ->
+        // 🔹 Simul 상태 변경 시 UI 업데이트 리스너 설정
+        bleManager.setScanStatusListener  { isScanningState ->
+            runOnUiThread {
+                val scanning = bleManager.isCurrentlyScanning() // 🔹 현재 스캔 상태 확인
+                btnScan.text = if (scanning) "Stop" else "Scan"
+                btnNScan.isEnabled = !scanning
+                btnClear.isEnabled = !scanning
+                switchSimul.isEnabled = !scanning
+                switchServer.isEnabled = !scanning
+            }
+        }
+        // 🔹 Simul 상태 변경 시 UI 업데이트 리스너 설정
+        bleManager.setSimulStatusListener { isScanningState ->
             runOnUiThread {
                 val scanning = bleManager.isCurrentlyScanning() // 🔹 현재 스캔 상태 확인
                 btnNScan.text = if (scanning) "Stop" else "Simul"
@@ -102,8 +111,11 @@ class MainActivity : AppCompatActivity(){
 
         // 🔹 Scan 버튼 클릭 리스너 (1회 스캔)
         btnScan.setOnClickListener {
-            lifecycleScope.launch {
-                bleManager.startScan(useSimulatorMode, useRemoteJson)
+            if (bleManager.isCurrentlyScanning()) {
+                bleManager.stopScan()
+            } else {
+                clearDeviceList()
+                bleManager.startScan(useRemoteJson)
             }
         }
 
