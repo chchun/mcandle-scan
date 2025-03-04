@@ -54,17 +54,38 @@ class BleManager(private val context: Context) {
         }
     }
 
-    private fun hexStringToByteArray(hexString: String): ByteArray {
-        var len = hexString.length
-        if (len % 2 == 1) len--
-        val data = ByteArray(len / 2)
-        var i = 0
-        while (i < len) {
-            data[i / 2] = ((hexString[i].digitToIntOrNull(16) ?: -1 shl 4)
-            + hexString[i + 1].digitToIntOrNull(16)!! ?: -1).toByte()
-            i += 2
+    fun hexStringToByteArray(hexString: String?): ByteArray {
+        if (hexString.isNullOrEmpty()) {
+            Log.e("BLE_SCAN", "Invalid HEX string: $hexString")
+            return byteArrayOf()  // 🚀 빈 배열 반환하여 예외 방지
         }
-        return data
+
+        val len = hexString.length
+        if (len % 2 == 1) {
+            Log.e("BLE_SCAN", "HEX string length is not even: $hexString")
+            return byteArrayOf()  // 🚀 잘못된 HEX 문자열 방어 처리
+        }
+
+        return try {
+            val data = ByteArray(len / 2)
+            var i = 0
+            while (i < len) {
+                val high = hexString[i].digitToIntOrNull(16) ?: -1
+                val low = hexString[i + 1].digitToIntOrNull(16) ?: -1
+
+                if (high == -1 || low == -1) {
+                    Log.e("BLE_SCAN", "Invalid HEX character in string: $hexString at index $i")
+                    return byteArrayOf()  // 🚀 잘못된 값 방어
+                }
+
+                data[i / 2] = ((high shl 4) + low).toByte()
+                i += 2
+            }
+            data
+        } catch (e: Exception) {
+            Log.e("BLE_SCAN", "Error converting HEX string to ByteArray: ${e.message}")
+            byteArrayOf()  // 🚀 예외 발생 시 안전하게 빈 배열 반환
+        }
     }
 
     private fun bytesToHex(bytes: ByteArray): String {
@@ -104,8 +125,12 @@ class BleManager(private val context: Context) {
     }
 
     fun startScan(useRemoteJson: Boolean = true) {
+
+        if (isScanning) return  // ✅ 이미 실행 중이면 중복 실행 방지
+
         isScanning = true
         CoroutineScope(Dispatchers.Main).launch {
+            Log.d("BLE_MANAGER", "startScan: Scan started") // ✅ 로그 추가
             scanStatusListener?.invoke(true) // ✅ UI 스레드에서 실행
         }
         val sp: SharedPreferences = context.getSharedPreferences("scanInfo", Context.MODE_PRIVATE)
@@ -114,6 +139,7 @@ class BleManager(private val context: Context) {
         Log.e("TAG", "startScan: rssi: ${sp.getString("rssi", "")}")
         Log.e("TAG", "startScan: manufacturerId: ${sp.getString("manufacturerId", "")}")
         Log.e("TAG", "startScan: data: ${sp.getString("data", "")}")
+
 
         var ret = At.Lib_AtStartNewScan(
             sp.getString("macAddress", ""),
@@ -127,6 +153,11 @@ class BleManager(private val context: Context) {
             isScanning = true
             CoroutineScope(Dispatchers.IO).launch {
                 recvScanData()
+            }
+        } else {
+            isScanning = false  // ✅ 스캔 실패 시 false로 복원
+            CoroutineScope(Dispatchers.Main).launch {
+                scanStatusListener?.invoke(false) // ✅ UI 업데이트
             }
         }
 
@@ -146,9 +177,16 @@ class BleManager(private val context: Context) {
         }
 
         scanJob = CoroutineScope(Dispatchers.IO).launch {
-            Log.d("BLE_SCAN", "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}")
+            Log.d(
+                "BLE_SCAN",
+                "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}"
+            )
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    "Starting BLE scan... Simulate Mode: ${if (isSimulated) "ON" else "OFF"}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
 
             while (isScanning) {
@@ -166,6 +204,7 @@ class BleManager(private val context: Context) {
     // BleManager.kt
     fun stopScan() {
         if (!isScanning) return // ✅ 이미 중지 상태면 실행하지 않음.
+
         isScanning = false
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -205,7 +244,8 @@ class BleManager(private val context: Context) {
 
 
     private fun getScanSettings(): ScanSettings {
-        val sharedPreferences: SharedPreferences = context.getSharedPreferences("scanInfo", Context.MODE_PRIVATE)
+        val sharedPreferences: SharedPreferences =
+            context.getSharedPreferences("scanInfo", Context.MODE_PRIVATE)
         return ScanSettings(
             sharedPreferences.getString("macAddress", "") ?: "",
             sharedPreferences.getString("broadcastName", "") ?: "",
@@ -347,47 +387,69 @@ class BleManager(private val context: Context) {
             // 🔹 MainActivity에 데이터 변경 알림 (UI 업데이트는 MainActivity에서)
             updateListener?.invoke(deviceList)
 
-            Log.d("BLE_SCAN", "Updated Device List: New = $newDeviceCount, Updated = $updatedDeviceCount")
+            Log.d(
+                "BLE_SCAN",
+                "Updated Device List: New = $newDeviceCount, Updated = $updatedDeviceCount"
+            )
         }
     }
 
 
+    @Throws(JSONException::class)
     fun parseAdvertisementData(advertisementData: ByteArray): JSONObject? {
-//        Map<String, String> parsedData = new HashMap<>();
-//        byte[] advertisementData =new byte[advertiseData.length()/2];
         val parsedData = JSONObject()
         var offset = 0
+
         while (offset < advertisementData.size) {
-            val length = advertisementData[offset++].toInt() and 0xFF
+            // 1️⃣ 데이터 길이 체크
+            if (offset >= advertisementData.size) break
+
+            val length = advertisementData.getOrNull(offset++)?.toInt() ?: break
             if (length == 0) break
 
-            val type = advertisementData[offset].toInt() and 0xFF
-            offset++
+            // 2️⃣ 데이터 타입 체크
+            if (offset >= advertisementData.size) break
+            val type = advertisementData.getOrNull(offset++)?.toInt() ?: break
 
-            val data = ByteArray(length - 1)
-            if (length - 1 > advertisementData.size - offset)  //data format issue.
-            {
-                return null
+            // 3️⃣ 데이터 크기가 배열을 초과하는지 검사
+            if (length - 1 > advertisementData.size - offset) {
+                Log.e(
+                    "BLE_SCAN",
+                    "Invalid data length=$length, remaining=${advertisementData.size - offset}"
+                )
+                return null  // 데이터 손상 가능성이 있으므로 중단
             }
-            System.arraycopy(advertisementData, offset, data, 0, length - 1)
-            offset += length - 1
 
+            // 4️⃣ 안전한 부분 배열 추출
+            val data = advertisementData.safeSubArray(offset, length - 1)
+            offset += data.size
+
+            // 5️⃣ 데이터 매핑
             when (type) {
                 0x01 -> parsedData.put("Flags", bytesToHex(data))
-                0x02, 0x03 -> parsedData.put("Service UUIDs", bytesToHex(data))
-                0x04, 0x05 -> parsedData.put("Service UUIDs", bytesToHex(data))
-                0x06, 0x07 -> parsedData.put("Service UUIDs", bytesToHex(data))
-                0x08, 0x09 -> parsedData.put("Device Name", String(data))
-                0x0A -> //                    byte [] tx_power=hexStringToByteArray(new String(data));
-                    parsedData.put("TX Power Level", data[0].toInt())
+                0x02, 0x03, 0x04, 0x05, 0x06, 0x07 -> parsedData.put(
+                    "Service UUIDs",
+                    bytesToHex(data)
+                )
 
+                0x08, 0x09 -> parsedData.put("Device Name", String(data))
+                0x0A -> if (data.isNotEmpty()) parsedData.put("TX Power Level", data[0].toInt())
                 0xFF -> parsedData.put("Manufacturer Data", bytesToHex(data))
                 else -> parsedData.put("Unknown Data ($type)", bytesToHex(data))
             }
         }
-
         return parsedData
     }
+
+    fun ByteArray.safeSubArray(start: Int, length: Int): ByteArray {
+        val end = minOf(this.size, start + length)
+        return if (start in indices && start < end) {
+            this.copyOfRange(start, end)
+        } else {
+            byteArrayOf() // 빈 배열 반환
+        }
+    }
+
 
     private fun parsePayload(payload: String): JSONObject? {
         val result = JSONObject()
@@ -429,152 +491,88 @@ class BleManager(private val context: Context) {
 
     private suspend fun recvScanData() {
         withContext(Dispatchers.IO) {
-            val recvData = ByteArray(2048)
-            val recvDataLen = IntArray(2)
-            var lineLeft: String = ""
-
             while (isScanning) {
-                val ret = At.Lib_ComRecvAT(recvData, recvDataLen, 20, 1000)
-                Log.e("TAG", "runLib_ComRecvAT: recvDataLen" + recvDataLen[0])
-                Log.e(
-                    "TAG", "Lib_ComRecvAT recvData: " + bytesToHex(
-                        recvData,
-                        recvDataLen.getOrNull(0) ?: 0  // 🚀 null-safe 처리
-                    )
-                )
-                val deviceMap: MutableMap<String, JSONObject?> = HashMap()
-                var startProcessing = false
-                // String buff= lineLeft+new String(recvData);
-                val buff = lineLeft + String(recvData, 0, recvDataLen[0])
-                // String []data=buff.split("\r\n|\r|\n");
-                val data = buff.split("\\r\\n|\\r|\\n".toRegex()).toTypedArray()
-                Log.e("TAG", "runLib_ComRecvAT: buff\n" + buff)
-                Log.e("TAG", "runLib_ComRecvAT: data\n" + data.size)
-                //Log.e("TAG", "debug crash position:echo21" );
-                val lineCount = data.size
-                // if(lineCount>0)//each time response data left last line ,for maybe data not recv all.
-                //     lineLeft = data[lineCount-1];
-                // else
-                //     lineLeft="";
+                val scanResult = receiveAndParseScanData() // ✅ 올바르게 호출
 
-                lineLeft = if ((data.size > 0)) data[data.size - 1] else ""
-                //for (String line : data)
-                for (i in 0 until lineCount - 1) {
-                    val line = data[i]
-                    //                    Log.e("TAG", "debug crash position:echo22" );
-                    if (line.startsWith("MAC:")) {
-                        startProcessing = true
-                        val parts = line.split(",".toRegex(), limit = 3).toTypedArray()
-                        if (parts.size < 3) {
-                            continue
-                        }
-
-                        val mac = parts[0].split(":".toRegex(), limit = 2)
-                            .toTypedArray()[1].trim { it <= ' ' }
-                        val rssi = parts[1].split(":".toRegex()).dropLastWhile { it.isEmpty() }
-                            .toTypedArray()[1].trim { it <= ' ' }
-                        var irssi = 0
-                        try {
-                            irssi = rssi.toInt() // ��֤ RSSI �Ƿ�Ϊ��Ч����
-                        } catch (e: NumberFormatException) {
-                            Log.e("TAG", "Invalid RSSI value: $rssi")
-                            continue
-                        }
-                        val payload = parts[2].split(":".toRegex(), limit = 2)
-                            .toTypedArray()[1].trim { it <= ' ' }
-                        if ((payload.length > 62) || (payload.length % 2 != 0)) continue
-                        //                        Log.e("TAG", "debug crash position:echo20" );
-                        var device: JSONObject?
-                        if (deviceMap.containsKey(mac)) {
-                            device = deviceMap[mac]
-                        } else {
-                            device = JSONObject()
-                            try {
-                                device.put("MAC", mac)
-                            } catch (e: JSONException) {
-                                Log.e(
-                                    "TAG",
-                                    "Handler runLib_ComRecvAT mac 0000: JSONException$e"
-                                )
-                                //throw new RuntimeException(e);
-                                continue
-                            }
-                            deviceMap[mac] = device
-                        }
-                        //                        Log.e("TAG", "debug crash position:echo19" );
-                        if (parts[2].startsWith("RSP")) {
-                            try {
-                                checkNotNull(device)
-                                device.put("RSP_org", payload)
-                                device.put(
-                                    "RSP",
-                                    parseAdvertisementData(hexStringToByteArray(payload))
-                                )
-                            } catch (e: JSONException) {
-                                Log.e("TAG", "Runnable 444: JSONException$e")
-                                //                                throw new RuntimeException(e);
-                                continue
-                            }
-                        } else if (parts[2].startsWith("ADV")) {
-                            //device.put("ADV", parsePayload(payload));
-                            try {
-                                checkNotNull(device)
-                                device.put("ADV_org", payload)
-                                device.put(
-                                    "ADV",
-                                    parseAdvertisementData(hexStringToByteArray(payload))
-                                )
-                            } catch (e: JSONException) {
-                                Log.e("TAG", "Runnable 333: JSONException$e")
-                                //                                throw new RuntimeException(e);
-                                continue
-                            }
-                        }
-                        //Log.e("TAG", "debug crash position:echo18" );
-                        try {
-                            checkNotNull(device)
-                            // Log.e("TAG", "debug crash position:echo18"+rssi );
-                            device.put("RSSI", irssi)
-                        } catch (e: JSONException) {
-                            Log.e("TAG", "Runnable 222: JSONException" + e.message)
-                            //                            throw new RuntimeException(e);
-                            continue
-                        }
-                        //                        Log.e("TAG", "debug crash position:echo17" );
-                        // ���ʱ����ֶ�
-                        try {
-                            //                                long curr_time=System.currentTimeMillis();
-                            device.put("Timestamp", System.currentTimeMillis())
-                        } catch (e: JSONException) {
-                            //Log.e("TAG", "Runnable 000: JSONException"+e );
-                            //                            throw new RuntimeException(e);
-                            continue
-                        }
-                        //                        Log.e("TAG", "debug crash position:echo16" );
-                    } else if (startProcessing) {
-                        // ����Ѿ���ʼ����MAC���ݣ���������MAC��ͷ�����ݣ�������
-                        continue
-                    }
-                    //                    Log.e("TAG", "debug crash position:echo14---"+);
+                if (scanResult.errorCode < 0) {
+                    Log.e("recvScanData", "BLE 수신 오류 발생: ${scanResult.errorMessage}")
+                    continue // 오류 발생 시 다음 루프로 이동
                 }
-
-                val jsonArray = JSONArray(deviceMap.values)
-                Log.e("TAG", "jsonArray" + jsonArray)
 
                 try {
-                    val bledDevices =  parseDevice2("" + jsonArray.toString(4))
+                    val bleDevices = parseDevice2(scanResult.jsonArray.toString()) // ✅ JSON 변환
                     withContext(Dispatchers.Main) {
-                        updateDeviceList(bledDevices)
+                        updateDeviceList(bleDevices)
                     }
                 } catch (e: JSONException) {
-                    throw RuntimeException(e)
+                    Log.e("recvScanData", "JSON 변환 오류: ${e.message}", e)
                 }
 
-                delay(2000)
+                delay(2000) // 2초 후 다시 스캔 실행
             }
-        } //
+        }
     }
+
+
+    private fun receiveAndParseScanData(): ScanResult {
+        val recvData = ByteArray(2048)
+        val recvDataLen = IntArray(2)
+
+        val ret = At.Lib_ComRecvAT(recvData, recvDataLen, 20, 1000)
+        if (ret < 0) {
+            Log.e("BLE_SCAN", "BLE 데이터 수신 실패 (코드: $ret)")
+            return ScanResult(ret, "BLE 데이터 수신 실패", JSONArray()) // ✅ 빈 JSON 배열 반환
+        }
+
+        val buff = String(recvData, 0, recvDataLen[0])
+        val data = buff.split("\\r\\n|\\r|\\n".toRegex()).toTypedArray()
+        val deviceMap: MutableMap<String, JSONObject> = mutableMapOf()
+
+        var startProcessing = false
+
+        for (line in data) {
+            if (line.startsWith("MAC:")) {
+                startProcessing = true
+                val parts = line.split(",")
+
+                if (parts.size < 3) continue
+
+                val mac = parts[0].split(":")[1].trim()
+                val rssi = parts[1].split(":")[1].trim().toIntOrNull() ?: continue
+                val payload = parts[2].split(":")[1].trim()
+
+                val device = deviceMap.getOrPut(mac) { JSONObject().apply { put("MAC", mac) } }
+
+                try {
+                    if (parts[2].startsWith("RSP")) {
+                        device.put("RSP_org", payload)
+                        device.put("RSP", parseAdvertisementData(hexStringToByteArray(payload)) ?: JSONObject())
+                    } else if (parts[2].startsWith("ADV")) {
+                        device.put("ADV_org", payload)
+                        device.put("ADV", parseAdvertisementData(hexStringToByteArray(payload)) ?: JSONObject())
+                    }
+
+                    device.put("RSSI", r                                      Assi)
+                    device.put("Timestamp", System.currentTimeMillis())
+
+                } catch (e: JSONException) {
+                    Log.e("BLE_SCAN", "JSON 파싱 오류: ${e.message}")
+                }
+            } else if (startProcessing) {
+                continue
+            }
+        }
+
+        val jsonArray = JSONArray(deviceMap.values)
+
+        return ScanResult(0, "스캔 성공", jsonArray) // ✅ JSON 배열로 변환 후 반환
+    }
+
 }
+
+
+
+
 private fun SendPromptMsg(msg: String) {
     Log.e("TAG", "UI Message: $msg") // UI 메시지를 로그로 출력
 }
@@ -596,11 +594,13 @@ fun parseDevice2(strInfo: String?): List<DeviceModel> {
             for (i in 0 until jsonArray.length()) {
                 var deviceName: String? = null
                 var uuid: String? = null
+                var txp: Int? = null
 
                 if (jsonArray.getJSONObject(i).has("ADV")) {
                     val objADV = jsonArray.getJSONObject(i).getJSONObject("ADV")
                     if (objADV.has("Service UUIDs")) uuid = objADV.getString("Service UUIDs")
                     if (objADV.has("Device Name")) deviceName = objADV.getString("Device Name")
+                    if (objADV.has("TX Power Level")) txp =  objADV.getInt("TX Power Level")
                 }
                 //                                JSONObject objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP");
 //                                JSONObject objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP");
@@ -608,6 +608,8 @@ fun parseDevice2(strInfo: String?): List<DeviceModel> {
                     val objRsp = jsonArray.getJSONObject(i).getJSONObject("RSP")
                     if (objRsp.has("Service UUIDs")) uuid = objRsp.getString("Service UUIDs")
                     if (objRsp.has("Device Name")) deviceName = objRsp.getString("Device Name")
+
+                    if (objRsp.has("TX Power Level")) txp =  objRsp.getInt("TX Power Level")
                 }
 
                 // DeviceModel 생성 및 리스트 추가
@@ -616,7 +618,7 @@ fun parseDevice2(strInfo: String?): List<DeviceModel> {
                         name = deviceName ?: "Unknown", // deviceName이 null이면 "Unknown"을 넣음
                         address =jsonArray.getJSONObject(i).getString("MAC"),
                         rssi = jsonArray.getJSONObject(i).getInt("RSSI"),
-                        //txPower = txPower,
+                        txPower = txp,
                         //manufacturerData = manufacturerData,
                         serviceUuids = uuid?: ""
                         //rviceData = serviceData

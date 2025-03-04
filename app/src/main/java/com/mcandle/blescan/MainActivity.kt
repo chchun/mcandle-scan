@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity(){
         // 🔹 Simul 상태 변경 시 UI 업데이트 리스너 설정
         bleManager.setScanStatusListener  { isScanningState ->
             runOnUiThread {
+                Log.d("MAIN", "Scan status changed: $isScanningState") // ✅ 로그 추가
                 val scanning = bleManager.isCurrentlyScanning() // 🔹 현재 스캔 상태 확인
                 btnScan.text = if (scanning) "Stop" else "Scan"
                 btnNScan.isEnabled = !scanning
